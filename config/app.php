@@ -30,6 +30,18 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Demo data seeder
+    |--------------------------------------------------------------------------
+    |
+    | Disabled by default, including in production. Enable it only while
+    | preparing a controlled demonstration environment.
+    |
+    */
+
+    'demo_seeder_enabled' => env('DEMO_SEEDER_ENABLED', false),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Debug Mode
     |--------------------------------------------------------------------------
     |

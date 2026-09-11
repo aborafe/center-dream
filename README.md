@@ -66,11 +66,14 @@ APP_URL=https://your-domain.example
 ```bash
 composer install --no-dev --optimize-autoloader
 php artisan migrate --force
+php artisan config:clear
 php artisan db:seed --class=DemoDataSeeder --force
 npm ci
 npm run build
 php artisan optimize
 ```
+
+لإنشاء بيانات العرض على إنتاج للمرة الأولى فقط، اضبط `DEMO_SEEDER_ENABLED=true` في `.env` قبل أمر الـSeeder، ثم أعده فورًا إلى `false` وشغّل `php artisan config:cache`.
 
 ## الاختبارات
 

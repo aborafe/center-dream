@@ -21,8 +21,8 @@ class DemoDataSeeder extends Seeder
 {
     public function run(): void
     {
-        if (app()->environment('production')) {
-            throw new \RuntimeException('بيانات العرض لا يمكن تشغيلها في بيئة الإنتاج.');
+        if (app()->environment('production') && ! config('app.demo_seeder_enabled')) {
+            throw new \RuntimeException('بيانات العرض تتطلب ضبط DEMO_SEEDER_ENABLED=true مؤقتًا في بيئة الإنتاج.');
         }
 
         $this->call(ReferenceDataSeeder::class);
