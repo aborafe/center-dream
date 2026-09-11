@@ -1,0 +1,1 @@
+<article class="metric"><div class="metric-top"><div><small>{{ $label }}</small><strong>{{ $value }}</strong></div><span class="metric-icon {{ $tone }}">{{ $icon }}</span></div><span class="metric-hint {{ $tone }}">{{ $hint }}</span></article>
