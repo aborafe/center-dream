@@ -3,24 +3,30 @@
 @section('content')
 <section class="screen" aria-labelledby="users-title">
     <x-page-header title="المستخدمون والصلاحيات" subtitle="أنشئ الحسابات، وراجع بيانات الدخول وحالة كل مستخدم." title-id="users-title" />
-    <form class="panel account-form" method="POST" action="{{ route('users.store') }}">
+    <form class="panel management-form users-create-form" method="POST" action="{{ route('users.store') }}">
         @csrf
-        <h2 id="users-title">إنشاء مستخدم</h2>
-        <div class="form-grid">
-            <x-input label="الاسم الكامل" name="name" value="{{ old('name') }}" autocomplete="name" required />
-            <x-input label="البريد الإلكتروني" name="email" type="email" value="{{ old('email') }}" autocomplete="email" spellcheck="false" required />
-            <x-input label="رقم الهاتف (اختياري)" name="phone" type="tel" value="{{ old('phone') }}" autocomplete="tel" inputmode="tel" />
-            <x-input label="المسمى الوظيفي" name="job_title" value="{{ old('job_title') }}" autocomplete="organization-title" required />
-            <x-input label="كلمة المرور" name="password" type="password" autocomplete="new-password" required />
-            <x-input label="تأكيد كلمة المرور" name="password_confirmation" type="password" autocomplete="new-password" required />
-            <div class="field-group"><label for="role_id">الدور</label><select id="role_id" name="role_id" required><option value="">اختر الدور…</option>@foreach ($roles as $role)<option value="{{ $role->id }}" data-role-slug="{{ $role->slug }}" @selected(old('role_id') == $role->id)>{{ $role->name }}</option>@endforeach</select><p class="field-hint">مدير المركز يملك جميع الصلاحيات تلقائيًا.</p></div>
+        <div class="management-form-heading"><div><p class="eyebrow">الوصول للنظام</p><h2 id="create-user-title">إنشاء مستخدم</h2><p>أنشئ الحساب ثم حدد مستوى الوصول المناسب قبل الحفظ.</p></div></div>
+        <div class="users-create-layout">
+            <section aria-labelledby="create-user-title">
+                <div class="form-grid">
+                    <x-input label="الاسم الكامل" name="name" value="{{ old('name') }}" autocomplete="name" required />
+                    <x-input label="البريد الإلكتروني" name="email" type="email" value="{{ old('email') }}" autocomplete="email" spellcheck="false" required />
+                    <x-input label="رقم الهاتف (اختياري)" name="phone" type="tel" value="{{ old('phone') }}" autocomplete="tel" inputmode="tel" />
+                    <x-input label="المسمى الوظيفي" name="job_title" value="{{ old('job_title') }}" autocomplete="organization-title" required />
+                    <x-input label="كلمة المرور" name="password" type="password" autocomplete="new-password" required />
+                    <x-input label="تأكيد كلمة المرور" name="password_confirmation" type="password" autocomplete="new-password" required />
+                    <div class="field-group"><label for="role_id">الدور</label><select id="role_id" name="role_id" required><option value="">اختر الدور…</option>@foreach ($roles as $role)<option value="{{ $role->id }}" data-role-slug="{{ $role->slug }}" @selected(old('role_id') == $role->id)>{{ $role->name }}</option>@endforeach</select><p class="field-hint">مدير المركز يملك جميع الصلاحيات تلقائيًا.</p></div>
+                </div>
+            </section>
+            <section class="permission-panel" aria-labelledby="permissions-title">
+                <div class="permission-head"><p class="eyebrow">وصول إضافي</p><h2 id="permissions-title">الصلاحيات</h2><p>تستخدم للسكرتير عند الحاجة؛ المدرس يقتصر على بوابته التعليمية.</p></div>
+                <div class="permission-grid" data-permission-grid>
+                    @foreach ($permissions as $permission)<label class="permission-option"><input type="checkbox" name="permission_ids[]" value="{{ $permission->id }}" @checked(in_array($permission->id, old('permission_ids', [])))><span>{{ $permission->name }}</span></label>@endforeach
+                </div>
+            </section>
         </div>
-        <hr>
-        <div class="permission-head"><h2>صلاحيات إضافية</h2><p>تستخدم للسكرتير عند الحاجة؛ المدرس يقتصر على بوابته التعليمية.</p></div>
-        <div class="permission-grid" data-permission-grid>
-            @foreach ($permissions as $permission)<label class="permission-option"><input type="checkbox" name="permission_ids[]" value="{{ $permission->id }}" @checked(in_array($permission->id, old('permission_ids', [])))><span>{{ $permission->name }}</span></label>@endforeach
-        </div>
-        <button class="primary-button form-save" type="submit">إنشاء المستخدم</button>
+        @foreach (['name', 'email', 'phone', 'job_title', 'password', 'role_id', 'permission_ids'] as $field) @error($field)<p class="form-message" role="alert">{{ $message }}</p>@enderror @endforeach
+        <div class="management-form-actions"><p>يمكنك تعديل الصلاحيات أو إعادة تعيين كلمة المرور لاحقًا.</p><button class="primary-button form-save" type="submit">إنشاء المستخدم</button></div>
     </form>
 
     <section class="panel structured-list">

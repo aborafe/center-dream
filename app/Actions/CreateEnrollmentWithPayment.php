@@ -14,35 +14,28 @@ use Illuminate\Validation\ValidationException;
 
 class CreateEnrollmentWithPayment
 {
-    /** @param array{student_name: string, student_phone: string, grade_id: int, subjects: list<array{subject_id: int, paid_amount: numeric-string|int|float, payment_method: string}>} $data */
+    /** @param array{student_name: string, student_phone: string, grade_id: int, subjects: list<array{grade_id: int, subject_id: int, paid_amount: numeric-string|int|float, payment_method: string}>} $data */
     public function handle(array $data, User $receiver): Collection
     {
         return DB::transaction(function () use ($data, $receiver): Collection {
             $subjects = Subject::query()->whereKey(collect($data['subjects'])->pluck('subject_id'))->get()->keyBy('id');
-            $firstSubject = $subjects->firstOrFail();
             $academicYear = AcademicYearLedger::active();
             AcademicYearLedger::ensureOpen($academicYear);
 
-            if ($subjects->count() !== count($data['subjects']) || $firstSubject->academic_year_id !== $academicYear->id || $firstSubject->grade_id !== (int) $data['grade_id'] || $subjects->contains(fn (Subject $subject): bool => $subject->academic_year_id !== $firstSubject->academic_year_id || $subject->grade_id !== $firstSubject->grade_id)) {
-                throw ValidationException::withMessages(['subjects' => 'اختر موادًا من الصف الدراسي المحدد ومن السنة الدراسية النشطة.']);
+            if ($subjects->isEmpty() || $subjects->count() !== count($data['subjects']) || $subjects->contains(fn (Subject $subject): bool => $subject->academic_year_id !== $academicYear->id) || collect($data['subjects'])->contains(fn (array $item): bool => $subjects->get($item['subject_id'])?->grade_id !== (int) $item['grade_id'])) {
+                throw ValidationException::withMessages(['subjects' => 'يجب أن تتطابق كل مادة مع صف المادة المختار وأن تكون من السنة الدراسية النشطة.']);
             }
 
             $phone = $this->normalizeEgyptianPhone($data['student_phone']);
 
             $student = Student::query()->firstOrCreate(
-                ['academic_year_id' => $firstSubject->academic_year_id, 'phone' => $phone],
+                ['academic_year_id' => $academicYear->id, 'phone' => $phone],
                 [
                     'name' => $data['student_name'],
-                    'academic_year_id' => $firstSubject->academic_year_id,
-                    'grade_id' => $firstSubject->grade_id,
+                    'academic_year_id' => $academicYear->id,
+                    'grade_id' => $data['grade_id'],
                 ],
             );
-
-            if ($student->grade_id !== $firstSubject->grade_id) {
-                throw ValidationException::withMessages([
-                    'subjects' => 'بيانات الطالب المسجلة لا تتوافق مع سنة وصف المواد المختارة.',
-                ]);
-            }
 
             return collect($data['subjects'])->map(function (array $item) use ($student, $subjects, $receiver): Enrollment {
                 $subject = $subjects->get($item['subject_id']);

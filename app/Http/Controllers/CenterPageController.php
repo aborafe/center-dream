@@ -276,6 +276,60 @@ class CenterPageController extends Controller
         ]);
     }
 
+    public function reportPreview(Request $request): View
+    {
+        $report = $this->reports($request)->getData();
+
+        return view('reports.preview', [...$report, 'centerSettings' => $this->centerSettings()]);
+    }
+
+    public function reportWhatsApp(Request $request): View
+    {
+        $report = $this->reports($request)->getData();
+        $recipients = collect()
+            ->concat(User::query()->whereNotNull('phone')->where('phone', '!=', '')->orderBy('name')->get()->map(fn (User $user): array => [
+                'type' => 'user', 'id' => $user->id, 'name' => $user->name, 'phone' => $user->phone, 'label' => 'مستخدم النظام',
+            ]))
+            ->concat(Teacher::query()->whereNotNull('phone')->where('phone', '!=', '')->orderBy('name')->get()->map(fn (Teacher $teacher): array => [
+                'type' => 'teacher', 'id' => $teacher->id, 'name' => $teacher->name, 'phone' => $teacher->phone, 'label' => 'مدرس',
+            ]));
+
+        return view('screens.report-whatsapp', [...$report, 'recipients' => $recipients]);
+    }
+
+    public function redirectReportToWhatsApp(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'recipient_type' => ['required', 'in:user,teacher'],
+            'recipient_id' => ['required', 'integer'],
+        ]);
+        $recipient = $data['recipient_type'] === 'teacher'
+            ? Teacher::query()->findOrFail($data['recipient_id'])
+            : User::query()->findOrFail($data['recipient_id']);
+        $digits = preg_replace('/\D+/', '', (string) $recipient->phone) ?? '';
+
+        if ($digits === '') {
+            return back()->withInput()->withErrors(['recipient_id' => 'لا يوجد رقم واتساب صالح للمستلم المختار.']);
+        }
+
+        if (str_starts_with($digits, '20')) {
+            $digits = substr($digits, 2);
+        }
+
+        $report = $this->reports($request)->getData();
+        $message = implode("\n", [
+            'تقرير '.$this->centerSettings()->center_name,
+            'الفترة: '.$report['periodLabel'],
+            'إجمالي التحصيل: '.number_format($report['collectionTotal'], 2).' ج.م',
+            'صرف المدرسين: '.number_format($report['teacherPayoutTotal'], 2).' ج.م',
+            'إيرادات السنتر: '.number_format($report['dailyIncomeTotal'], 2).' ج.م',
+            'مصروفات السنتر: '.number_format($report['dailyExpenseTotal'], 2).' ج.م',
+            'صافي التحصيل: '.number_format($report['netCollections'], 2).' ج.م',
+        ]);
+
+        return redirect()->away('https://wa.me/20'.ltrim($digits, '0').'?text='.rawurlencode($message));
+    }
+
     public function storeSubject(StoreSubjectRequest $request, CreateSubject $createSubject): RedirectResponse
     {
         $createSubject->handle($request->validated());
@@ -598,7 +652,8 @@ class CenterPageController extends Controller
             'filters' => [...$filters, 'academic_year_id' => $academicYearId, 'from' => $from->toDateString(), 'to' => $to->toDateString(), 'type' => $type],
             'academicYears' => AcademicYear::query()->orderByDesc('starts_on')->get(),
             'secretaries' => User::query()->where('is_active', true)->orderBy('name')->get(),
-            'teachers' => Teacher::query()->where('is_active', true)->orderBy('name')->get(),
+            // Keep historical teachers available so old financial movements remain filterable.
+            'teachers' => Teacher::query()->orderBy('name')->get(),
             'collectionTotal' => (float) $payments->sum('amount'),
             'teacherPayoutTotal' => (float) $payouts->sum('amount'),
             'refundTotal' => (float) $refunds->sum('amount'),

@@ -96,23 +96,27 @@ function setupSubscriptionForm() {
     let lookupRequest;
 
     const updateRows = () => {
-        const gradeId = gradeSelect?.value || '';
         let fees = 0;
         let paid = 0;
 
         [...rows.querySelectorAll('[data-subject-row]')].forEach((row, index) => {
             row.querySelector('[data-row-number]').textContent = String(index + 1);
+            const subjectGrade = row.querySelector('[data-subject-grade-select]');
             const subject = row.querySelector('[data-subject-select]');
             const amount = row.querySelector('[data-paid-input]');
             const method = row.querySelector('[data-method-select]');
             const detail = row.querySelector('[data-subject-details]');
             const removeButton = row.querySelector('[data-remove-subject]');
+            const subjectGradeId = subjectGrade.value;
+            subjectGrade.name = `subjects[${index}][grade_id]`;
             subject.name = `subjects[${index}][subject_id]`;
             amount.name = `subjects[${index}][paid_amount]`;
             method.name = `subjects[${index}][payment_method]`;
+            subjectGrade.id = `subject-grade-${index}`;
             subject.id = `subject-${index}`;
             amount.id = `paid-amount-${index}`;
             method.id = `payment-method-${index}`;
+            row.querySelector('[data-subject-grade-label]')?.setAttribute('for', subjectGrade.id);
             row.querySelector('[data-subject-label]')?.setAttribute('for', subject.id);
             row.querySelector('[data-paid-label]')?.setAttribute('for', amount.id);
             row.querySelector('[data-method-label]')?.setAttribute('for', method.id);
@@ -121,15 +125,15 @@ function setupSubscriptionForm() {
 
             [...subject.options].forEach((option) => {
                 const isPlaceholder = !option.value;
-                const belongsToGrade = !isPlaceholder && option.dataset.gradeId === gradeId;
+                const belongsToGrade = !isPlaceholder && option.dataset.gradeId === subjectGradeId;
                 option.hidden = !isPlaceholder && !belongsToGrade;
                 option.disabled = !isPlaceholder && !belongsToGrade;
             });
 
-            if (subject.value && subject.selectedOptions[0]?.dataset.gradeId !== gradeId) {
+            if (subject.value && subject.selectedOptions[0]?.dataset.gradeId !== subjectGradeId) {
                 subject.value = '';
             }
-            subject.disabled = !gradeId;
+            subject.disabled = !subjectGradeId;
         });
 
         const selectedIds = [...rows.querySelectorAll('[data-subject-select]')]
@@ -137,12 +141,13 @@ function setupSubscriptionForm() {
             .filter(Boolean);
 
         [...rows.querySelectorAll('[data-subject-row]')].forEach((row, index) => {
+            const subjectGrade = row.querySelector('[data-subject-grade-select]');
             const subject = row.querySelector('[data-subject-select]');
             const amount = row.querySelector('[data-paid-input]');
             const detail = row.querySelector('[data-subject-details]');
 
             [...subject.options].forEach((option) => {
-                if (!option.value || option.dataset.gradeId !== gradeId) {
+                if (!option.value || option.dataset.gradeId !== subjectGrade.value) {
                     return;
                 }
 
@@ -156,16 +161,14 @@ function setupSubscriptionForm() {
             paid += paidAmount;
             detail.textContent = fee
                 ? `${selected.dataset.teacher || 'غير محدد'} — ${money.format(fee)} ج.م`
-                : (gradeId ? 'اختر مادة لعرض السعر والمدرس.' : 'اختر الصف الدراسي أولًا لعرض مواده.');
+                : (subjectGrade.value ? 'اختر مادة لعرض السعر والمدرس.' : 'اختر صف المادة أولًا لعرض مواده.');
         });
 
         totalFee.textContent = `${money.format(fees)} ج.م`;
         totalPaid.textContent = `${money.format(paid)} ج.م`;
         totalRemaining.textContent = `${money.format(Math.max(0, fees - paid))} ج.م`;
-        const availableSubjectCount = gradeId
-            ? [...rows.querySelectorAll('[data-subject-select] option[value]')].filter((option) => option.dataset.gradeId === gradeId).length
-            : 0;
-        addButton.disabled = !gradeId || selectedIds.length >= availableSubjectCount;
+        const availableSubjectCount = rows.querySelector('[data-subject-select]')?.querySelectorAll('option[value]').length || 0;
+        addButton.disabled = selectedIds.length >= availableSubjectCount;
     };
 
     const lockGrade = (gradeId) => {
@@ -177,6 +180,11 @@ function setupSubscriptionForm() {
         lockedGradeInput.value = String(gradeId);
         gradeSelect.disabled = true;
         lockedGradeInput.disabled = false;
+        rows.querySelectorAll('[data-subject-grade-select]').forEach((subjectGrade) => {
+            if (!subjectGrade.value) {
+                subjectGrade.value = String(gradeId);
+            }
+        });
         updateRows();
     };
 
@@ -189,10 +197,14 @@ function setupSubscriptionForm() {
         gradeSelect.disabled = false;
         lockedGradeInput.value = '';
         lockedGradeInput.disabled = true;
+        rows.querySelectorAll('[data-subject-grade-select], [data-subject-select]').forEach((input) => {
+            input.value = '';
+        });
         updateRows();
     };
 
     const bindRow = (row) => {
+        row.querySelector('[data-subject-grade-select]').addEventListener('change', updateRows);
         row.querySelector('[data-subject-select]').addEventListener('change', updateRows);
         row.querySelector('[data-paid-input]').addEventListener('input', updateRows);
         row.querySelector('[data-remove-subject]').addEventListener('click', () => {
@@ -206,13 +218,20 @@ function setupSubscriptionForm() {
     };
 
     rows.querySelectorAll('[data-subject-row]').forEach(bindRow);
-    gradeSelect?.addEventListener('change', updateRows);
+    gradeSelect?.addEventListener('change', () => {
+        rows.querySelectorAll('[data-subject-grade-select]').forEach((subjectGrade) => {
+            if (!subjectGrade.value) {
+                subjectGrade.value = gradeSelect.value;
+            }
+        });
+        updateRows();
+    });
     addButton.addEventListener('click', () => {
         const row = template.content.firstElementChild.cloneNode(true);
         rows.append(row);
         bindRow(row);
         updateRows();
-        row.querySelector('[data-subject-select]').focus();
+        row.querySelector('[data-subject-grade-select]').focus();
     });
 
     if (phoneInput && nameInput && lookupOutput) {
@@ -745,6 +764,23 @@ function setupDateRangePicker() {
     updateTrigger();
 }
 
+function setupReportRecipientPicker() {
+    const picker = document.querySelector('[data-recipient-picker]');
+
+    if (!picker) {
+        return;
+    }
+
+    picker.querySelectorAll('[data-recipient-type]').forEach((radio) => {
+        radio.addEventListener('change', () => {
+            picker.querySelectorAll('[data-recipient-id]').forEach((input) => {
+                input.disabled = true;
+            });
+            radio.parentElement.querySelector('[data-recipient-id]').disabled = false;
+        });
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     setupSidebar();
     setupWhatsAppLinks();
@@ -756,4 +792,5 @@ document.addEventListener('DOMContentLoaded', () => {
     setupSubmissionLoading();
     setupTableFilters();
     setupDateRangePicker();
+    setupReportRecipientPicker();
 });

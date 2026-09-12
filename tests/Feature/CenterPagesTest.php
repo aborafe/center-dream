@@ -498,6 +498,7 @@ class CenterPagesTest extends TestCase
             'student_phone' => '01095225454',
             'grade_id' => $grade->id,
             'subjects' => [[
+                'grade_id' => $grade->id,
                 'subject_id' => $oldSubject->id,
                 'paid_amount' => 450,
                 'payment_method' => 'cash',
@@ -531,6 +532,7 @@ class CenterPagesTest extends TestCase
             'student_phone' => '01095225454',
             'grade_id' => $grade->id,
             'subjects' => [[
+                'grade_id' => $grade->id,
                 'subject_id' => $newSubject->id,
                 'paid_amount' => 200,
                 'payment_method' => 'cash',
@@ -608,6 +610,7 @@ class CenterPagesTest extends TestCase
             'student_phone' => '01095225454',
             'grade_id' => $grade->id,
             'subjects' => [[
+                'grade_id' => $grade->id,
                 'subject_id' => $subject->id,
                 'paid_amount' => 200,
                 'payment_method' => 'cash',
@@ -619,7 +622,7 @@ class CenterPagesTest extends TestCase
         $this->assertDatabaseHas('payments', ['enrollment_id' => $enrollment->id, 'amount' => 200, 'method' => 'cash']);
     }
 
-    public function test_subscription_rejects_a_subject_from_a_different_grade(): void
+    public function test_subscription_allows_a_subject_from_a_different_grade_than_the_students_profile(): void
     {
         $year = AcademicYear::query()->create([
             'name' => '2026 / 2027', 'starts_on' => '2026-09-01', 'ends_on' => '2027-06-30', 'is_active' => true,
@@ -637,13 +640,15 @@ class CenterPagesTest extends TestCase
             'student_phone' => '01095225454',
             'grade_id' => $selectedGrade->id,
             'subjects' => [[
+                'grade_id' => $subjectGrade->id,
                 'subject_id' => $subject->id,
                 'paid_amount' => 200,
                 'payment_method' => 'cash',
             ]],
-        ])->assertRedirect('/subscriptions/create')->assertSessionHasErrors('subjects');
+        ])->assertRedirect();
 
-        $this->assertDatabaseMissing('students', ['phone' => '01095225454']);
+        $this->assertDatabaseHas('students', ['phone' => '01095225454', 'grade_id' => $selectedGrade->id]);
+        $this->assertDatabaseHas('enrollments', ['subject_id' => $subject->id]);
     }
 
     public function test_subscription_saves_multiple_subjects_in_one_transaction(): void
@@ -661,8 +666,8 @@ class CenterPagesTest extends TestCase
             'student_phone' => '01095225454',
             'grade_id' => $grade->id,
             'subjects' => [
-                ['subject_id' => $math->id, 'paid_amount' => 200, 'payment_method' => 'cash'],
-                ['subject_id' => $physics->id, 'paid_amount' => 300, 'payment_method' => 'wallet'],
+                ['grade_id' => $grade->id, 'subject_id' => $math->id, 'paid_amount' => 200, 'payment_method' => 'cash'],
+                ['grade_id' => $grade->id, 'subject_id' => $physics->id, 'paid_amount' => 300, 'payment_method' => 'wallet'],
             ],
         ])->assertRedirect();
 
@@ -685,8 +690,8 @@ class CenterPagesTest extends TestCase
             'student_phone' => '01095225454',
             'grade_id' => $grade->id,
             'subjects' => [
-                ['subject_id' => $math->id, 'paid_amount' => 200, 'payment_method' => 'cash'],
-                ['subject_id' => $physics->id, 'paid_amount' => 600, 'payment_method' => 'cash'],
+                ['grade_id' => $grade->id, 'subject_id' => $math->id, 'paid_amount' => 200, 'payment_method' => 'cash'],
+                ['grade_id' => $grade->id, 'subject_id' => $physics->id, 'paid_amount' => 600, 'payment_method' => 'cash'],
             ],
         ])->assertRedirect('/subscriptions/create')->assertSessionHasErrors('subjects');
 
@@ -910,5 +915,39 @@ class CenterPagesTest extends TestCase
         $this->assertDatabaseHas('teachers', ['id' => $teacher->id, 'name' => 'أ. أحمد سامي المعدل', 'is_active' => false]);
         $this->assertDatabaseHas('subjects', ['id' => $subject->id, 'name' => 'رياضيات متقدمة', 'fee' => 500, 'is_active' => false]);
         $this->assertDatabaseHas('users', ['id' => $user->id, 'name' => 'مستخدم موقوف', 'is_active' => false]);
+    }
+
+    public function test_reports_support_teacher_and_date_filters_with_preview_and_whatsapp_recipient_selection(): void
+    {
+        $recipient = User::query()->firstOrFail();
+        $recipient->update(['name' => 'مدير الاختبار', 'phone' => '01012345678']);
+        $year = AcademicYear::query()->create(['name' => '2026 / 2027', 'starts_on' => '2026-09-01', 'ends_on' => '2027-06-30', 'is_active' => true]);
+        $grade = Grade::query()->create(['name' => 'الصف الثالث الثانوي', 'sort_order' => 3]);
+        $teacher = Teacher::query()->create(['name' => 'أ. مدرس سابق', 'phone' => '01098765432', 'is_active' => false]);
+        $subject = Subject::query()->create(['academic_year_id' => $year->id, 'grade_id' => $grade->id, 'teacher_id' => $teacher->id, 'name' => 'رياضيات', 'fee' => 450, 'is_active' => true]);
+        $student = Student::query()->create(['academic_year_id' => $year->id, 'grade_id' => $grade->id, 'name' => 'طالب الفترة', 'phone' => '01055555555']);
+        $enrollment = Enrollment::query()->create(['student_id' => $student->id, 'subject_id' => $subject->id, 'fee' => 450, 'discount_amount' => 0]);
+        Payment::query()->create(['student_id' => $student->id, 'enrollment_id' => $enrollment->id, 'received_by' => $recipient->id, 'amount' => 250, 'method' => 'cash', 'receipt_number' => 'REPORT-FILTER-001', 'paid_at' => '2026-09-10 12:00:00']);
+        $filters = ['academic_year_id' => $year->id, 'from' => '2026-09-10', 'to' => '2026-09-10', 'teacher_id' => $teacher->id, 'type' => 'collection'];
+
+        $this->get(route('reports.index', $filters))
+            ->assertOk()
+            ->assertSee('أ. مدرس سابق — موقوف')
+            ->assertSee('طالب الفترة')
+            ->assertSee('2026-09-10');
+
+        $this->get(route('reports.preview', $filters))
+            ->assertOk()
+            ->assertSee('طباعة أو حفظ PDF')
+            ->assertSee('طالب الفترة');
+
+        $this->get(route('reports.whatsapp', $filters))
+            ->assertOk()
+            ->assertSee('مدير الاختبار')
+            ->assertSee('متابعة إلى واتساب');
+
+        $response = $this->get(route('reports.whatsapp.redirect', [...$filters, 'recipient_type' => 'user', 'recipient_id' => $recipient->id]));
+        $response->assertRedirect();
+        $this->assertStringStartsWith('https://wa.me/201012345678?text=', (string) $response->headers->get('Location'));
     }
 }

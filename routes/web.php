@@ -39,6 +39,9 @@ Route::middleware('auth')->group(function (): void {
     Route::put('/users/{user}', [CenterPageController::class, 'updateUser'])->whereNumber('user')->middleware('permission:users')->name('users.update');
     Route::delete('/users/{user}', [CenterPageController::class, 'destroyUser'])->whereNumber('user')->middleware('permission:users')->name('users.destroy');
     Route::get('/reports', [CenterPageController::class, 'reports'])->middleware('permission:reports')->name('reports.index');
+    Route::get('/reports/preview', [CenterPageController::class, 'reportPreview'])->middleware('permission:reports')->name('reports.preview');
+    Route::get('/reports/share/whatsapp', [CenterPageController::class, 'reportWhatsApp'])->middleware('permission:reports')->name('reports.whatsapp');
+    Route::get('/reports/share/whatsapp/redirect', [CenterPageController::class, 'redirectReportToWhatsApp'])->middleware('permission:reports')->name('reports.whatsapp.redirect');
     Route::get('/collections', [CenterPageController::class, 'collections'])->middleware('permission:collections')->name('collections.create');
     Route::post('/collections', [CenterPageController::class, 'storeCollection'])->middleware('permission:collections')->name('collections.store');
     Route::get('/discounts', [CenterPageController::class, 'discounts'])->middleware('permission:discounts')->name('discounts.index');

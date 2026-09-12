@@ -4,20 +4,25 @@
 <section class="screen" aria-labelledby="teachers-title">
     <x-page-header title="المدرسون" subtitle="تابع المحفظة والمواد، وعدّل حالة كل مدرس من نفس الصفحة." title-id="teachers-title" />
 
-    <form class="panel account-form" method="POST" action="{{ route('teachers.store') }}">
-        @csrf
-        <h2>إضافة مدرس</h2>
-        <div class="form-grid">
-            <x-input label="اسم المدرس" name="name" value="{{ old('name') }}" autocomplete="name" required />
-            <x-input label="رقم الهاتف (اختياري)" name="phone" type="tel" value="{{ old('phone') }}" autocomplete="tel" inputmode="tel" />
-        </div>
-        @foreach (['name', 'phone'] as $field)
-            @error($field)<p class="form-message" role="alert">{{ $message }}</p>@enderror
-        @endforeach
-        <button class="primary-button form-save" type="submit">إضافة المدرس</button>
-    </form>
+    <div class="teachers-workspace">
+        <form class="panel management-form teacher-create-form" method="POST" action="{{ route('teachers.store') }}">
+            @csrf
+            <div class="management-form-heading"><div><p class="eyebrow">فريق العمل</p><h2>إضافة مدرس</h2><p>أضف بيانات التواصل الآن، ثم اربط المدرس بمواده من الإدارة الأكاديمية.</p></div></div>
+            <div class="form-grid">
+                <x-input label="اسم المدرس" name="name" value="{{ old('name') }}" autocomplete="name" required />
+                <x-input label="رقم الهاتف (اختياري)" name="phone" type="tel" value="{{ old('phone') }}" autocomplete="tel" inputmode="tel" />
+            </div>
+            @foreach (['name', 'phone'] as $field) @error($field)<p class="form-message" role="alert">{{ $message }}</p>@enderror @endforeach
+            <div class="management-form-actions"><p>لا يمكن صرف مستحقات قبل ربط مادة بالمدرس.</p><button class="primary-button form-save" type="submit">إضافة المدرس</button></div>
+        </form>
+        <aside class="panel teachers-guide" aria-label="دليل إدارة المدرسين">
+            <span class="teachers-guide-mark" aria-hidden="true"><x-icon name="teacher" /></span>
+            <div><p class="eyebrow">خطوة تالية</p><h2>اربط المواد بالمدرس</h2><p>بعد الحفظ، انتقل إلى الإدارة الأكاديمية وحدد مدرس المادة ورسومها.</p></div>
+            <a class="outline-button" href="{{ route('academics.index') }}">إدارة المواد</a>
+        </aside>
+    </div>
 
-    <div class="entity-grid">
+    <div class="entity-grid teachers-grid">
         @forelse ($teachers as $teacher)
             <article class="panel entity-card teacher-card {{ $teacher['is_active'] ? '' : 'is-inactive' }}">
                 <div class="entity-card-topline">
