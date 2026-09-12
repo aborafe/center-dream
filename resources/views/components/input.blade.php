@@ -2,6 +2,7 @@
     'label',
     'value' => '',
     'name' => null,
+    'id' => null,
     'type' => 'text',
     'autocomplete' => 'off',
     'placeholder' => null,
@@ -10,7 +11,7 @@
 
 @php
     $fieldName = $name ?: 'field_'.substr(md5($label), 0, 8);
-    $fieldId = 'field-'.str_replace('_', '-', $fieldName);
+    $fieldId = $id ?: 'field-'.str_replace('_', '-', $fieldName);
 @endphp
 
 <div class="form-field">

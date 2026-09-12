@@ -14,6 +14,7 @@
             <div class="form-grid">
                 <x-input label="اسم الطالب" name="student_name" value="{{ old('student_name') }}" placeholder="مثال: أحمد محمد…" autocomplete="name" data-student-name required />
                 <x-input label="رقم الهاتف" name="student_phone" value="{{ old('student_phone') }}" placeholder="مثال: 01012345678" autocomplete="tel" inputmode="tel" type="tel" data-student-phone required />
+                <div class="field-group subscription-grade-field"><label for="subscription-grade">الصف الدراسي</label><select id="subscription-grade" name="grade_id" data-subscription-grade required><option value="">اختر الصف الدراسي…</option>@foreach ($grades as $grade)<option value="{{ $grade->id }}" @selected((int) old('grade_id') === $grade->id)>{{ $grade->name }}</option>@endforeach</select><small>اختر الصف أولًا لتظهر مواده فقط.</small><input type="hidden" name="grade_id" data-subscription-grade-hidden disabled></div>
             </div>
             <div class="student-lookup" data-student-lookup aria-live="polite" hidden></div>
         </section>
@@ -22,7 +23,7 @@
             <div class="subscription-section-head">
                 <div class="subscription-step-heading">
                     <span class="subscription-step-number" aria-hidden="true">2</span>
-                    <div><h2 id="subscription-subjects-title">مواد الاشتراك</h2><p>اختر مادة ثم سجل المبلغ المستلم وطريقة الدفع لها.</p></div>
+                    <div><h2 id="subscription-subjects-title">مواد الاشتراك</h2><p>تظهر هنا مواد الصف المختار فقط؛ اختر المادة ثم سجل المبلغ وطريقة الدفع.</p></div>
                 </div>
                 <button class="outline-button subscription-add-button" type="button" data-add-subject>
                     <span aria-hidden="true">+</span> إضافة مادة
@@ -40,7 +41,7 @@
                             </button>
                         </div>
                         <div class="form-grid subject-entry-grid">
-                            <div class="field-group"><label for="subject-{{ $index }}">المادة</label><select id="subject-{{ $index }}" name="subjects[{{ $index }}][subject_id]" data-subject-select required><option value="">اختر المادة…</option>@foreach ($subjects as $subject)<option value="{{ $subject->id }}" data-fee="{{ $subject->fee }}" data-teacher="{{ $subject->teacher?->name }}" @selected((int) ($oldSubject['subject_id'] ?? 0) === $subject->id)>{{ $subject->name }} — {{ $subject->grade->name }} · {{ number_format($subject->fee, 2) }} ج.م</option>@endforeach</select></div>
+                            <div class="field-group"><label for="subject-{{ $index }}">المادة</label><select id="subject-{{ $index }}" name="subjects[{{ $index }}][subject_id]" data-subject-select required><option value="">اختر الصف الدراسي أولًا…</option>@foreach ($subjects as $subject)<option value="{{ $subject->id }}" data-grade-id="{{ $subject->grade_id }}" data-fee="{{ $subject->fee }}" data-teacher="{{ $subject->teacher?->name }}" @selected((int) ($oldSubject['subject_id'] ?? 0) === $subject->id)>{{ $subject->name }} · {{ number_format($subject->fee, 2) }} ج.م</option>@endforeach</select></div>
                             <div class="field-group"><span class="field-label">المدرس ورسوم المادة</span><p class="field-hint" data-subject-details>اختر مادة لعرض السعر والمدرس.</p></div>
                             <x-input label="المبلغ المدفوع" name="subjects[{{ $index }}][paid_amount]" type="number" min="0" step="0.01" value="{{ $oldSubject['paid_amount'] ?? 0 }}" inputmode="decimal" autocomplete="off" data-paid-input required />
                             <div class="field-group"><label for="payment-method-{{ $index }}">طريقة الدفع</label><select id="payment-method-{{ $index }}" name="subjects[{{ $index }}][payment_method]" data-method-select required><option value="cash" @selected(($oldSubject['payment_method'] ?? 'cash') === 'cash')>نقدي</option><option value="transfer" @selected(($oldSubject['payment_method'] ?? '') === 'transfer')>تحويل</option><option value="wallet" @selected(($oldSubject['payment_method'] ?? '') === 'wallet')>محفظة</option></select></div>
@@ -54,7 +55,7 @@
             <article class="subject-entry" data-subject-row>
                 <div class="subject-entry-head"><div><span class="subject-entry-label">اشتراك</span><strong>مادة <span data-row-number></span></strong></div><button class="icon-button danger-button" type="button" aria-label="حذف المادة" title="حذف المادة" data-remove-subject><x-icon name="trash" /></button></div>
                 <div class="form-grid subject-entry-grid">
-                    <div class="field-group"><label data-subject-label>المادة</label><select data-subject-select required><option value="">اختر المادة…</option>@foreach ($subjects as $subject)<option value="{{ $subject->id }}" data-fee="{{ $subject->fee }}" data-teacher="{{ $subject->teacher?->name }}">{{ $subject->name }} — {{ $subject->grade->name }} · {{ number_format($subject->fee, 2) }} ج.م</option>@endforeach</select></div>
+                    <div class="field-group"><label data-subject-label>المادة</label><select data-subject-select required><option value="">اختر الصف الدراسي أولًا…</option>@foreach ($subjects as $subject)<option value="{{ $subject->id }}" data-grade-id="{{ $subject->grade_id }}" data-fee="{{ $subject->fee }}" data-teacher="{{ $subject->teacher?->name }}">{{ $subject->name }} · {{ number_format($subject->fee, 2) }} ج.م</option>@endforeach</select></div>
                     <div class="field-group"><span class="field-label">المدرس ورسوم المادة</span><p class="field-hint" data-subject-details>اختر مادة لعرض السعر والمدرس.</p></div>
                     <div class="form-field"><label data-paid-label>المبلغ المدفوع</label><input type="number" min="0" step="0.01" value="0" inputmode="decimal" autocomplete="off" data-paid-input required></div>
                     <div class="field-group"><label data-method-label>طريقة الدفع</label><select data-method-select required><option value="cash">نقدي</option><option value="transfer">تحويل</option><option value="wallet">محفظة</option></select></div>
@@ -72,7 +73,7 @@
         </section>
 
         @error('subjects')<p class="form-message" role="alert">{{ $message }}</p>@enderror
-        @foreach (['student_name', 'student_phone'] as $field) @error($field)<p class="form-message" role="alert">{{ $message }}</p>@enderror @endforeach
+        @foreach (['student_name', 'student_phone', 'grade_id'] as $field) @error($field)<p class="form-message" role="alert">{{ $message }}</p>@enderror @endforeach
         <div class="subscription-submit"><p>سيُسجل التحصيل لكل مادة بشكل مستقل.</p><button class="primary-button form-save" type="submit">حفظ الاشتراكات والتحصيل</button></div>
     </form>
 </section>

@@ -37,6 +37,7 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/users', [CenterPageController::class, 'users'])->middleware('permission:users')->name('users.index');
     Route::post('/users', [CenterPageController::class, 'storeUser'])->middleware('permission:users')->name('users.store');
     Route::put('/users/{user}', [CenterPageController::class, 'updateUser'])->whereNumber('user')->middleware('permission:users')->name('users.update');
+    Route::delete('/users/{user}', [CenterPageController::class, 'destroyUser'])->whereNumber('user')->middleware('permission:users')->name('users.destroy');
     Route::get('/reports', [CenterPageController::class, 'reports'])->middleware('permission:reports')->name('reports.index');
     Route::get('/collections', [CenterPageController::class, 'collections'])->middleware('permission:collections')->name('collections.create');
     Route::post('/collections', [CenterPageController::class, 'storeCollection'])->middleware('permission:collections')->name('collections.store');

@@ -17,6 +17,7 @@ use App\Models\Teacher;
 use App\Models\TeacherPayout;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 class CenterPagesTest extends TestCase
@@ -188,7 +189,7 @@ class CenterPagesTest extends TestCase
     public function test_subscription_endpoint_validates_before_persistence_is_connected(): void
     {
         $this->post('/subscriptions', [])
-            ->assertSessionHasErrors(['student_name', 'student_phone', 'subjects']);
+            ->assertSessionHasErrors(['student_name', 'student_phone', 'grade_id', 'subjects']);
     }
 
     public function test_student_profile_exposes_a_normalized_whatsapp_link(): void
@@ -309,6 +310,69 @@ class CenterPagesTest extends TestCase
         $this->assertTrue($user->hasPermission('students'));
         $this->assertTrue($user->hasPermission('collections'));
         $this->assertFalse($user->hasPermission('reports'));
+    }
+
+    public function test_administrator_can_reset_a_user_password_and_override_role_permissions(): void
+    {
+        $dashboard = Permission::query()->create(['name' => 'لوحة التحكم', 'slug' => 'dashboard']);
+        $students = Permission::query()->create(['name' => 'إدارة الطلاب', 'slug' => 'students']);
+        $reports = Permission::query()->create(['name' => 'عرض التقارير', 'slug' => 'reports']);
+        $secretary = Role::query()->create(['name' => 'سكرتير', 'slug' => 'secretary']);
+        $secretary->permissions()->sync([$dashboard->id, $students->id]);
+        $user = User::factory()->create(['email' => 'secretary-update@example.test']);
+        $user->roles()->attach($secretary);
+
+        $this->put(route('users.update', $user), [
+            'name' => 'سكرتير بعد التعديل',
+            'email' => $user->email,
+            'phone' => '01011111111',
+            'job_title' => 'سكرتير',
+            'is_active' => '1',
+            'password' => 'UpdatedPass-2026!',
+            'password_confirmation' => 'UpdatedPass-2026!',
+            'permission_ids' => [$dashboard->id, $reports->id],
+        ])->assertRedirect(route('users.index'));
+
+        $user->refresh()->load(['roles.permissions', 'permissions']);
+
+        $this->assertTrue(Hash::check('UpdatedPass-2026!', $user->password));
+        $this->assertTrue($user->hasPermission('dashboard'));
+        $this->assertFalse($user->hasPermission('students'));
+        $this->assertTrue($user->hasPermission('reports'));
+        $this->assertDatabaseHas('permission_user', ['user_id' => $user->id, 'permission_id' => $students->id, 'is_granted' => false]);
+    }
+
+    public function test_administrator_can_delete_an_unlinked_user_but_not_the_current_or_audited_user(): void
+    {
+        $unlinkedUser = User::factory()->create();
+
+        $this->delete(route('users.destroy', $unlinkedUser))
+            ->assertRedirect(route('users.index'));
+        $this->assertModelMissing($unlinkedUser);
+
+        $currentUser = User::query()->firstOrFail();
+        $this->from(route('users.index'))
+            ->delete(route('users.destroy', $currentUser))
+            ->assertRedirect(route('users.index'))
+            ->assertSessionHasErrors('user');
+
+        $year = AcademicYear::query()->create(['name' => '2026 / 2027', 'starts_on' => '2026-09-01', 'ends_on' => '2027-06-30', 'is_active' => true]);
+        $auditedUser = User::factory()->create();
+        DailyCashMovement::query()->create([
+            'academic_year_id' => $year->id,
+            'type' => 'income',
+            'category' => 'daily_collection',
+            'amount' => 100,
+            'movement_date' => '2026-09-12',
+            'collector_id' => $auditedUser->id,
+            'recorded_by' => $currentUser->id,
+        ]);
+
+        $this->from(route('users.index'))
+            ->delete(route('users.destroy', $auditedUser))
+            ->assertRedirect(route('users.index'))
+            ->assertSessionHasErrors('user');
+        $this->assertModelExists($auditedUser);
     }
 
     public function test_creating_teacher_user_creates_linked_teacher_profile(): void
@@ -432,6 +496,7 @@ class CenterPagesTest extends TestCase
         $this->post('/subscriptions', [
             'student_name' => 'سارة محمد',
             'student_phone' => '01095225454',
+            'grade_id' => $grade->id,
             'subjects' => [[
                 'subject_id' => $oldSubject->id,
                 'paid_amount' => 450,
@@ -464,6 +529,7 @@ class CenterPagesTest extends TestCase
         $this->post('/subscriptions', [
             'student_name' => 'سارة محمد',
             'student_phone' => '01095225454',
+            'grade_id' => $grade->id,
             'subjects' => [[
                 'subject_id' => $newSubject->id,
                 'paid_amount' => 200,
@@ -540,6 +606,7 @@ class CenterPagesTest extends TestCase
         $this->post('/subscriptions', [
             'student_name' => 'سارة محمد',
             'student_phone' => '01095225454',
+            'grade_id' => $grade->id,
             'subjects' => [[
                 'subject_id' => $subject->id,
                 'paid_amount' => 200,
@@ -550,6 +617,33 @@ class CenterPagesTest extends TestCase
         $enrollment = Enrollment::query()->firstOrFail();
         $this->assertDatabaseHas('students', ['name' => 'سارة محمد', 'phone' => '01095225454']);
         $this->assertDatabaseHas('payments', ['enrollment_id' => $enrollment->id, 'amount' => 200, 'method' => 'cash']);
+    }
+
+    public function test_subscription_rejects_a_subject_from_a_different_grade(): void
+    {
+        $year = AcademicYear::query()->create([
+            'name' => '2026 / 2027', 'starts_on' => '2026-09-01', 'ends_on' => '2027-06-30', 'is_active' => true,
+        ]);
+        $selectedGrade = Grade::query()->create(['name' => 'الصف الثاني الثانوي', 'sort_order' => 2]);
+        $subjectGrade = Grade::query()->create(['name' => 'الصف الثالث الثانوي', 'sort_order' => 3]);
+        $teacher = Teacher::query()->create(['name' => 'أ. أحمد سامي']);
+        $subject = Subject::query()->create([
+            'academic_year_id' => $year->id, 'grade_id' => $subjectGrade->id, 'teacher_id' => $teacher->id,
+            'name' => 'رياضيات', 'fee' => 450, 'is_active' => true,
+        ]);
+
+        $this->from('/subscriptions/create')->post('/subscriptions', [
+            'student_name' => 'سارة محمد',
+            'student_phone' => '01095225454',
+            'grade_id' => $selectedGrade->id,
+            'subjects' => [[
+                'subject_id' => $subject->id,
+                'paid_amount' => 200,
+                'payment_method' => 'cash',
+            ]],
+        ])->assertRedirect('/subscriptions/create')->assertSessionHasErrors('subjects');
+
+        $this->assertDatabaseMissing('students', ['phone' => '01095225454']);
     }
 
     public function test_subscription_saves_multiple_subjects_in_one_transaction(): void
@@ -565,6 +659,7 @@ class CenterPagesTest extends TestCase
         $this->post('/subscriptions', [
             'student_name' => 'سارة محمد',
             'student_phone' => '01095225454',
+            'grade_id' => $grade->id,
             'subjects' => [
                 ['subject_id' => $math->id, 'paid_amount' => 200, 'payment_method' => 'cash'],
                 ['subject_id' => $physics->id, 'paid_amount' => 300, 'payment_method' => 'wallet'],
@@ -588,6 +683,7 @@ class CenterPagesTest extends TestCase
         $this->from('/subscriptions/create')->post('/subscriptions', [
             'student_name' => 'سارة محمد',
             'student_phone' => '01095225454',
+            'grade_id' => $grade->id,
             'subjects' => [
                 ['subject_id' => $math->id, 'paid_amount' => 200, 'payment_method' => 'cash'],
                 ['subject_id' => $physics->id, 'paid_amount' => 600, 'payment_method' => 'cash'],

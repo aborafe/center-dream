@@ -14,7 +14,7 @@ use Illuminate\Validation\ValidationException;
 
 class CreateEnrollmentWithPayment
 {
-    /** @param array{student_name: string, student_phone: string, subjects: list<array{subject_id: int, paid_amount: numeric-string|int|float, payment_method: string}>} $data */
+    /** @param array{student_name: string, student_phone: string, grade_id: int, subjects: list<array{subject_id: int, paid_amount: numeric-string|int|float, payment_method: string}>} $data */
     public function handle(array $data, User $receiver): Collection
     {
         return DB::transaction(function () use ($data, $receiver): Collection {
@@ -23,8 +23,8 @@ class CreateEnrollmentWithPayment
             $academicYear = AcademicYearLedger::active();
             AcademicYearLedger::ensureOpen($academicYear);
 
-            if ($subjects->count() !== count($data['subjects']) || $firstSubject->academic_year_id !== $academicYear->id || $subjects->contains(fn (Subject $subject): bool => $subject->academic_year_id !== $firstSubject->academic_year_id || $subject->grade_id !== $firstSubject->grade_id)) {
-                throw ValidationException::withMessages(['subjects' => 'اختر موادًا من نفس السنة الدراسية والصف.']);
+            if ($subjects->count() !== count($data['subjects']) || $firstSubject->academic_year_id !== $academicYear->id || $firstSubject->grade_id !== (int) $data['grade_id'] || $subjects->contains(fn (Subject $subject): bool => $subject->academic_year_id !== $firstSubject->academic_year_id || $subject->grade_id !== $firstSubject->grade_id)) {
+                throw ValidationException::withMessages(['subjects' => 'اختر موادًا من الصف الدراسي المحدد ومن السنة الدراسية النشطة.']);
             }
 
             $phone = $this->normalizeEgyptianPhone($data['student_phone']);

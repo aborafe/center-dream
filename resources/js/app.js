@@ -89,14 +89,14 @@ function setupSubscriptionForm() {
     const phoneInput = form.querySelector('[data-student-phone]');
     const nameInput = form.querySelector('[data-student-name]');
     const lookupOutput = form.querySelector('[data-student-lookup]');
+    const gradeSelect = form.querySelector('[data-subscription-grade]');
+    const lockedGradeInput = form.querySelector('[data-subscription-grade-hidden]');
     const money = new Intl.NumberFormat('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     let lookupTimer;
     let lookupRequest;
 
     const updateRows = () => {
-        const selectedIds = [...rows.querySelectorAll('[data-subject-select]')]
-            .map((select) => select.value)
-            .filter(Boolean);
+        const gradeId = gradeSelect?.value || '';
         let fees = 0;
         let paid = 0;
 
@@ -120,7 +120,33 @@ function setupSubscriptionForm() {
             removeButton.title = removeButton.disabled ? 'أضف مادة أخرى أولًا لتتمكن من الحذف' : 'حذف المادة';
 
             [...subject.options].forEach((option) => {
-                option.disabled = Boolean(option.value && option.value !== subject.value && selectedIds.includes(option.value));
+                const isPlaceholder = !option.value;
+                const belongsToGrade = !isPlaceholder && option.dataset.gradeId === gradeId;
+                option.hidden = !isPlaceholder && !belongsToGrade;
+                option.disabled = !isPlaceholder && !belongsToGrade;
+            });
+
+            if (subject.value && subject.selectedOptions[0]?.dataset.gradeId !== gradeId) {
+                subject.value = '';
+            }
+            subject.disabled = !gradeId;
+        });
+
+        const selectedIds = [...rows.querySelectorAll('[data-subject-select]')]
+            .map((select) => select.value)
+            .filter(Boolean);
+
+        [...rows.querySelectorAll('[data-subject-row]')].forEach((row, index) => {
+            const subject = row.querySelector('[data-subject-select]');
+            const amount = row.querySelector('[data-paid-input]');
+            const detail = row.querySelector('[data-subject-details]');
+
+            [...subject.options].forEach((option) => {
+                if (!option.value || option.dataset.gradeId !== gradeId) {
+                    return;
+                }
+
+                option.disabled = option.value !== subject.value && selectedIds.includes(option.value);
             });
 
             const selected = subject.selectedOptions[0];
@@ -128,13 +154,42 @@ function setupSubscriptionForm() {
             const paidAmount = Math.max(0, Number(amount.value || 0));
             fees += fee;
             paid += paidAmount;
-            detail.textContent = fee ? `${selected.dataset.teacher || 'غير محدد'} — ${money.format(fee)} ج.م` : 'اختر مادة لعرض السعر والمدرس.';
+            detail.textContent = fee
+                ? `${selected.dataset.teacher || 'غير محدد'} — ${money.format(fee)} ج.م`
+                : (gradeId ? 'اختر مادة لعرض السعر والمدرس.' : 'اختر الصف الدراسي أولًا لعرض مواده.');
         });
 
         totalFee.textContent = `${money.format(fees)} ج.م`;
         totalPaid.textContent = `${money.format(paid)} ج.م`;
         totalRemaining.textContent = `${money.format(Math.max(0, fees - paid))} ج.م`;
-        addButton.disabled = selectedIds.length >= rows.querySelectorAll('[data-subject-select] option[value]').length;
+        const availableSubjectCount = gradeId
+            ? [...rows.querySelectorAll('[data-subject-select] option[value]')].filter((option) => option.dataset.gradeId === gradeId).length
+            : 0;
+        addButton.disabled = !gradeId || selectedIds.length >= availableSubjectCount;
+    };
+
+    const lockGrade = (gradeId) => {
+        if (!gradeSelect || !lockedGradeInput) {
+            return;
+        }
+
+        gradeSelect.value = String(gradeId);
+        lockedGradeInput.value = String(gradeId);
+        gradeSelect.disabled = true;
+        lockedGradeInput.disabled = false;
+        updateRows();
+    };
+
+    const unlockGrade = () => {
+        if (!gradeSelect || !lockedGradeInput) {
+            return;
+        }
+
+        gradeSelect.value = '';
+        gradeSelect.disabled = false;
+        lockedGradeInput.value = '';
+        lockedGradeInput.disabled = true;
+        updateRows();
     };
 
     const bindRow = (row) => {
@@ -151,6 +206,7 @@ function setupSubscriptionForm() {
     };
 
     rows.querySelectorAll('[data-subject-row]').forEach(bindRow);
+    gradeSelect?.addEventListener('change', updateRows);
     addButton.addEventListener('click', () => {
         const row = template.content.firstElementChild.cloneNode(true);
         rows.append(row);
@@ -164,6 +220,7 @@ function setupSubscriptionForm() {
             window.clearTimeout(lookupTimer);
             lookupRequest?.abort();
             lookupOutput.hidden = true;
+            unlockGrade();
 
             if (phoneInput.value.replace(/\D/g, '').length < 10) {
                 return;
@@ -179,6 +236,7 @@ function setupSubscriptionForm() {
                     const data = await response.json();
 
                     if (!data.found) {
+                        unlockGrade();
                         lookupOutput.textContent = 'طالب جديد: أكمل الاسم ثم اختر المواد.';
                         lookupOutput.className = 'student-lookup is-new';
                         lookupOutput.hidden = false;
@@ -186,6 +244,7 @@ function setupSubscriptionForm() {
                     }
 
                     nameInput.value = data.student.name;
+                    lockGrade(data.student.grade_id);
                     const details = document.createElement('div');
                     const title = document.createElement('strong');
                     const description = document.createElement('span');
@@ -250,6 +309,9 @@ function setupDialogsAndRows() {
     });
     document.querySelectorAll('[data-delete-student]').forEach((form) => form.addEventListener('submit', (event) => {
         if (!window.confirm(`سيُحذف الطالب ${form.dataset.studentName} وكل اشتراكاته ومدفوعاته. هل تريد المتابعة؟`)) event.preventDefault();
+    }));
+    document.querySelectorAll('[data-delete-user]').forEach((form) => form.addEventListener('submit', (event) => {
+        if (!window.confirm(`سيُحذف المستخدم ${form.dataset.userName} نهائيًا. لا يمكن حذف المستخدم المرتبط بحركات مالية. هل تريد المتابعة؟`)) event.preventDefault();
     }));
 }
 

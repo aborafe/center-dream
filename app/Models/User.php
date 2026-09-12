@@ -27,7 +27,7 @@ class User extends Authenticatable
 
     public function permissions(): BelongsToMany
     {
-        return $this->belongsToMany(Permission::class);
+        return $this->belongsToMany(Permission::class)->withPivot('is_granted');
     }
 
     public function hasRole(string $role): bool
@@ -41,8 +41,13 @@ class User extends Authenticatable
             return true;
         }
 
-        return $this->permissions->contains('slug', $permission)
-            || $this->roles->flatMap(fn (Role $role) => $role->permissions)->contains('slug', $permission);
+        $override = $this->permissions->firstWhere('slug', $permission);
+
+        if ($override) {
+            return (bool) $override->pivot->is_granted;
+        }
+
+        return $this->roles->flatMap(fn (Role $role) => $role->permissions)->contains('slug', $permission);
     }
 
     /**

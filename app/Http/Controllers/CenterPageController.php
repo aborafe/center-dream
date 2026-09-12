@@ -174,6 +174,10 @@ class CenterPageController extends Controller
 
         return view('screens.subscription', [
             'subjects' => Subject::query()->with(['teacher', 'grade'])->when($academicYear, fn ($query) => $query->where('academic_year_id', $academicYear->id))->where('is_active', true)->orderBy('name')->get(),
+            'grades' => Grade::query()
+                ->when($academicYear, fn ($query) => $query->whereHas('subjects', fn ($subjects) => $subjects->where('academic_year_id', $academicYear->id)->where('is_active', true)))
+                ->orderBy('sort_order')
+                ->get(['id', 'name']),
             'academicYear' => $academicYear,
         ]);
     }
@@ -193,6 +197,7 @@ class CenterPageController extends Controller
             'student' => [
                 'id' => $student->id,
                 'name' => $student->name,
+                'grade_id' => $student->grade_id,
                 'grade' => $student->grade->name,
                 'academic_year' => $student->academicYear->name,
                 'subjects' => $student->enrollments->pluck('subject.name')->filter()->values(),
@@ -402,16 +407,23 @@ class CenterPageController extends Controller
 
     public function users(): View
     {
-        $users = User::query()->with(['roles.permissions', 'permissions'])->get()->map(function (User $user): array {
-            $scope = $user->hasRole('admin') ? 'كامل الصلاحيات' : ($user->permissions->concat($user->roles->flatMap->permissions)->unique('id')->pluck('name')->join('، ') ?: 'لا توجد صلاحيات');
+        $permissions = Permission::query()->orderBy('name')->get();
+        $users = User::query()->with(['roles.permissions', 'permissions'])->get()->map(function (User $user) use ($permissions): array {
+            $permissionIds = $permissions
+                ->filter(fn (Permission $permission): bool => $user->hasPermission($permission->slug))
+                ->pluck('id')
+                ->all();
+            $scope = $user->hasRole('admin')
+                ? 'كامل الصلاحيات'
+                : ($permissions->whereIn('id', $permissionIds)->pluck('name')->join('، ') ?: 'لا توجد صلاحيات');
 
-            return ['id' => $user->id, 'name' => $user->name, 'email' => $user->email, 'phone' => $user->phone, 'job_title' => $user->job_title, 'role' => $user->roles->pluck('name')->join('، ') ?: 'بلا دور', 'scope' => $scope, 'is_active' => $user->is_active];
+            return ['id' => $user->id, 'name' => $user->name, 'email' => $user->email, 'phone' => $user->phone, 'job_title' => $user->job_title, 'role' => $user->roles->pluck('name')->join('، ') ?: 'بلا دور', 'scope' => $scope, 'is_active' => $user->is_active, 'permission_ids' => $permissionIds, 'permissions_locked' => $user->hasRole('admin'), 'is_current_user' => $user->is(auth()->user())];
         });
 
         return view('screens.users', [
             'users' => $users,
             'roles' => Role::query()->orderBy('name')->get(),
-            'permissions' => Permission::query()->orderBy('name')->get(),
+            'permissions' => $permissions,
         ]);
     }
 
@@ -430,15 +442,54 @@ class CenterPageController extends Controller
             'phone' => ['nullable', 'string', 'max:30'],
             'job_title' => ['required', 'string', 'max:120'],
             'is_active' => ['nullable', 'boolean'],
+            'password' => ['nullable', 'string', 'min:8', 'confirmed'],
+            'permission_ids' => ['nullable', 'array'],
+            'permission_ids.*' => ['integer', 'distinct', 'exists:permissions,id'],
         ]);
 
         if ($user->is($request->user()) && ! $request->boolean('is_active')) {
             return back()->withErrors(['is_active' => 'لا يمكنك إيقاف حسابك أثناء تسجيل الدخول به.']);
         }
 
-        $user->update([...$data, 'is_active' => $request->boolean('is_active')]);
+        $updates = collect($data)->except(['password', 'permission_ids', 'is_active'])->all();
+        $updates['is_active'] = $request->boolean('is_active');
 
-        return redirect()->route('users.index')->with('status', 'تم تحديث المستخدم وحالة دخوله.');
+        if (filled($data['password'] ?? null)) {
+            $updates['password'] = $data['password'];
+        }
+
+        $user->update($updates);
+
+        if (! $user->hasRole('admin')) {
+            $selectedPermissionIds = collect($data['permission_ids'] ?? [])->map(fn ($id): int => (int) $id)->unique();
+            $permissionStates = Permission::query()->pluck('id')->mapWithKeys(fn (int $id): array => [
+                $id => ['is_granted' => $selectedPermissionIds->contains($id)],
+            ])->all();
+
+            $user->permissions()->sync($permissionStates);
+        }
+
+        return redirect()->route('users.index')->with('status', filled($data['password'] ?? null) ? 'تم تحديث المستخدم وإعادة تعيين كلمة المرور والصلاحيات.' : 'تم تحديث المستخدم وحالة دخوله وصلاحياته.');
+    }
+
+    public function destroyUser(Request $request, User $user): RedirectResponse
+    {
+        if ($user->is($request->user())) {
+            return back()->withErrors(['user' => 'لا يمكنك حذف حسابك أثناء تسجيل الدخول به.']);
+        }
+
+        $hasFinancialHistory = Payment::query()->where('received_by', $user->id)->exists()
+            || TeacherPayout::query()->where('paid_by', $user->id)->exists()
+            || Refund::query()->where('refunded_by', $user->id)->exists()
+            || DailyCashMovement::query()->where('collector_id', $user->id)->orWhere('recorded_by', $user->id)->exists();
+
+        if ($hasFinancialHistory) {
+            return back()->withErrors(['user' => 'لا يمكن حذف المستخدم لأنه مرتبط بحركات مالية. أوقف الحساب بدلًا من حذفه للحفاظ على سجل المراجعة.']);
+        }
+
+        $user->delete();
+
+        return redirect()->route('users.index')->with('status', 'تم حذف المستخدم غير المرتبط بسجلات مالية.');
     }
 
     public function reports(Request $request): View
