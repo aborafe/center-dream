@@ -7,6 +7,7 @@ use App\Models\Enrollment;
 use App\Models\Student;
 use App\Models\Subject;
 use App\Models\User;
+use App\Support\AcademicYearLedger;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -17,9 +18,11 @@ class AddStudentSubject
     public function handle(Student $student, array $data, User $user): Enrollment
     {
         return DB::transaction(function () use ($student, $data, $user): Enrollment {
+            $academicYear = AcademicYearLedger::active();
+            AcademicYearLedger::ensureOpen($academicYear);
             $subject = Subject::query()->lockForUpdate()->findOrFail($data['subject_id']);
 
-            if (! $subject->is_active || $subject->academic_year_id !== $student->academic_year_id || $subject->grade_id !== $student->grade_id) {
+            if (! $subject->is_active || $student->academic_year_id !== $academicYear->id || $subject->academic_year_id !== $student->academic_year_id || $subject->grade_id !== $student->grade_id) {
                 throw ValidationException::withMessages(['subject_id' => 'هذه المادة ليست متاحة لسنة وصف الطالب.']);
             }
 

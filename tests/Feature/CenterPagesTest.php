@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\AcademicYear;
 use App\Models\CenterSetting;
+use App\Models\DailyCashMovement;
 use App\Models\Discount;
 use App\Models\Enrollment;
 use App\Models\Grade;
@@ -35,7 +36,7 @@ class CenterPagesTest extends TestCase
 
     public function test_workspace_pages_are_available(): void
     {
-        foreach (['/', '/students', '/subscriptions/create', '/collections', '/discounts', '/teacher-payouts', '/inventory', '/academics', '/teachers', '/users', '/reports', '/profile', '/settings'] as $url) {
+        foreach (['/', '/students', '/subscriptions/create', '/collections', '/daily-cashbook', '/discounts', '/teacher-payouts', '/inventory', '/academics', '/teachers', '/users', '/reports', '/profile', '/settings'] as $url) {
             $this->get($url)->assertOk();
         }
     }
@@ -63,6 +64,18 @@ class CenterPagesTest extends TestCase
             ->assertDontSee('بحث عام');
     }
 
+    public function test_teacher_login_redirects_to_his_private_portal_instead_of_the_administrator_dashboard(): void
+    {
+        $teacherRole = Role::query()->create(['name' => 'مدرس', 'slug' => 'teacher']);
+        $teacherUser = User::factory()->create(['email' => 'teacher@example.test', 'password' => 'TeacherPass-2026']);
+        $teacherUser->roles()->attach($teacherRole);
+
+        $this->post(route('login.authenticate'), [
+            'identifier' => 'teacher@example.test',
+            'password' => 'TeacherPass-2026',
+        ])->assertRedirect(route('teacher.portal'));
+    }
+
     public function test_global_search_redirects_to_student_results(): void
     {
         $year = AcademicYear::query()->create([
@@ -87,7 +100,7 @@ class CenterPagesTest extends TestCase
             ->assertDontSee('عمر خالد');
     }
 
-    public function test_students_can_be_filtered_by_subject_from_inventory_link(): void
+    public function test_students_can_be_filtered_by_subject_and_the_filter_identifies_its_grade(): void
     {
         $year = AcademicYear::query()->create(['name' => '2026 / 2027', 'starts_on' => '2026-09-01', 'ends_on' => '2027-06-30', 'is_active' => true]);
         $grade = Grade::query()->create(['name' => 'الصف الثالث الثانوي', 'sort_order' => 3]);
@@ -102,7 +115,48 @@ class CenterPagesTest extends TestCase
         $this->get('/students?subject_id='.$math->id)
             ->assertOk()
             ->assertSee('سارة محمد')
+            ->assertSee('الصف الثالث الثانوي')
             ->assertDontSee('عمر خالد');
+    }
+
+    public function test_dashboard_shortcuts_open_actionable_daily_and_debt_views(): void
+    {
+        $year = AcademicYear::query()->create(['name' => '2026 / 2027', 'starts_on' => '2026-09-01', 'ends_on' => '2027-06-30', 'is_active' => true]);
+        $grade = Grade::query()->create(['name' => 'الصف الثالث الثانوي', 'sort_order' => 3]);
+        $teacher = Teacher::query()->create(['name' => 'أ. أحمد سامي']);
+        $subject = Subject::query()->create(['academic_year_id' => $year->id, 'grade_id' => $grade->id, 'teacher_id' => $teacher->id, 'name' => 'رياضيات', 'fee' => 450, 'is_active' => true]);
+        $dueStudent = Student::query()->create(['academic_year_id' => $year->id, 'grade_id' => $grade->id, 'name' => 'سارة مدينة', 'phone' => '01095225454']);
+        $settledStudent = Student::query()->create(['academic_year_id' => $year->id, 'grade_id' => $grade->id, 'name' => 'عمر منتظم', 'phone' => '01095225455']);
+        $dueEnrollment = Enrollment::query()->create(['student_id' => $dueStudent->id, 'subject_id' => $subject->id, 'fee' => 450, 'discount_amount' => 0]);
+        $settledEnrollment = Enrollment::query()->create(['student_id' => $settledStudent->id, 'subject_id' => $subject->id, 'fee' => 450, 'discount_amount' => 0]);
+        $cancelledStudent = Student::query()->create(['academic_year_id' => $year->id, 'grade_id' => $grade->id, 'name' => 'طالب ملغى', 'phone' => '01095225456']);
+        Enrollment::query()->create(['student_id' => $cancelledStudent->id, 'subject_id' => $subject->id, 'fee' => 450, 'discount_amount' => 0, 'cancelled_at' => now()]);
+        Payment::query()->create(['student_id' => $settledStudent->id, 'enrollment_id' => $settledEnrollment->id, 'received_by' => User::query()->firstOrFail()->id, 'receipt_number' => 'DASHBOARD-SETTLED', 'amount' => 450, 'method' => 'cash', 'paid_at' => now()]);
+
+        $this->get('/')
+            ->assertOk()
+            ->assertSee('الصف الثالث الثانوي')
+            ->assertSee('2 طلاب')
+            ->assertSee(route('students.index', ['account' => 'due']), false)
+            ->assertSee(route('discounts.index', ['date' => now()->toDateString()]), false)
+            ->assertSee(route('inventory.index'), false);
+
+        $this->get(route('students.index', ['account' => 'due']))
+            ->assertOk()
+            ->assertSee('سارة مدينة')
+            ->assertDontSee('عمر منتظم');
+
+        $this->get(route('students.index', ['account' => 'complete']))
+            ->assertOk()
+            ->assertSee('عمر منتظم')
+            ->assertDontSee('سارة مدينة');
+
+        $this->get(route('reports.index', ['from' => now()->toDateString(), 'to' => now()->toDateString()]))
+            ->assertOk()
+            ->assertSee('عمر منتظم')
+            ->assertSee('تحصيل طالب');
+
+        $this->assertDatabaseHas('enrollments', ['id' => $dueEnrollment->id]);
     }
 
     public function test_subscription_lookup_returns_existing_student_by_normalized_phone(): void
@@ -114,8 +168,10 @@ class CenterPagesTest extends TestCase
         $this->getJson('/subscriptions/student-lookup?phone=%2B201095225454')
             ->assertOk()
             ->assertJsonPath('found', true)
+            ->assertJsonPath('student.id', 1)
             ->assertJsonPath('student.name', 'سارة محمد')
-            ->assertJsonPath('student.grade', 'الصف الثالث الثانوي');
+            ->assertJsonPath('student.grade', 'الصف الثالث الثانوي')
+            ->assertJsonPath('student.profile_url', route('students.show', 1));
     }
 
     public function test_receipt_is_rendered_as_a_standalone_print_page(): void
@@ -211,6 +267,27 @@ class CenterPagesTest extends TestCase
         $this->get('/')->assertForbidden();
     }
 
+    public function test_secretary_role_has_only_its_assigned_operational_pages(): void
+    {
+        $permissions = collect([
+            'dashboard', 'students', 'enrollments', 'collections', 'discounts', 'reports', 'payouts', 'academics', 'users', 'settings',
+        ])->mapWithKeys(fn (string $slug) => [$slug => Permission::query()->create(['name' => $slug, 'slug' => $slug])]);
+        $secretaryRole = Role::query()->create(['name' => 'سكرتير', 'slug' => 'secretary']);
+        $secretaryRole->permissions()->sync($permissions->only(['dashboard', 'students', 'enrollments', 'collections'])->pluck('id'));
+        $secretary = User::factory()->create();
+        $secretary->roles()->attach($secretaryRole);
+
+        $this->actingAs($secretary);
+
+        foreach (['/', '/students', '/subscriptions/create', '/collections', '/daily-cashbook'] as $url) {
+            $this->get($url)->assertOk();
+        }
+
+        foreach (['/discounts', '/teacher-payouts', '/inventory', '/academics', '/teachers', '/users', '/reports', '/settings'] as $url) {
+            $this->get($url)->assertForbidden();
+        }
+    }
+
     public function test_administrator_can_create_secretary_with_direct_permissions(): void
     {
         $secretary = Role::query()->create(['name' => 'سكرتير', 'slug' => 'secretary']);
@@ -275,6 +352,26 @@ class CenterPagesTest extends TestCase
         ]);
     }
 
+    public function test_administrator_can_delete_an_unused_subject_but_not_a_subject_with_enrollments(): void
+    {
+        $year = AcademicYear::query()->create(['name' => '2026 / 2027', 'starts_on' => '2026-09-01', 'ends_on' => '2027-06-30', 'is_active' => true]);
+        $grade = Grade::query()->create(['name' => 'الصف الثالث الثانوي', 'sort_order' => 3]);
+        $teacher = Teacher::query()->create(['name' => 'أ. أحمد سامي']);
+        $unusedSubject = Subject::query()->create(['academic_year_id' => $year->id, 'grade_id' => $grade->id, 'teacher_id' => $teacher->id, 'name' => 'كيمياء', 'fee' => 400, 'is_active' => true]);
+        $subscribedSubject = Subject::query()->create(['academic_year_id' => $year->id, 'grade_id' => $grade->id, 'teacher_id' => $teacher->id, 'name' => 'رياضيات', 'fee' => 450, 'is_active' => true]);
+        $student = Student::query()->create(['academic_year_id' => $year->id, 'grade_id' => $grade->id, 'name' => 'سارة محمد', 'phone' => '01095225454']);
+        Enrollment::query()->create(['student_id' => $student->id, 'subject_id' => $subscribedSubject->id, 'fee' => 450, 'discount_amount' => 0]);
+
+        $this->delete(route('academics.subjects.destroy', $unusedSubject))
+            ->assertRedirect(route('academics.index'));
+        $this->assertModelMissing($unusedSubject);
+
+        $this->delete(route('academics.subjects.destroy', $subscribedSubject))
+            ->assertRedirect(route('academics.index'))
+            ->assertSessionHasErrors('subject');
+        $this->assertModelExists($subscribedSubject);
+    }
+
     public function test_administrator_can_create_teacher(): void
     {
         $this->post('/teachers', [
@@ -291,7 +388,17 @@ class CenterPagesTest extends TestCase
 
     public function test_administrator_can_create_active_year_and_grade(): void
     {
-        $oldYear = AcademicYear::query()->create(['name' => '2025 / 2026', 'starts_on' => '2025-09-01', 'ends_on' => '2026-06-30', 'is_active' => true]);
+        $administrator = User::query()->firstOrFail();
+        $oldYear = AcademicYear::query()->create([
+            'name' => '2025 / 2026',
+            'starts_on' => '2025-09-01',
+            'ends_on' => '2026-06-30',
+            'is_active' => false,
+            'financial_closed_at' => now(),
+            'financial_closed_by' => $administrator->id,
+            'academic_closed_at' => now(),
+            'academic_closed_by' => $administrator->id,
+        ]);
 
         $this->post('/academics/years', [
             'name' => '2026 / 2027',
@@ -308,6 +415,114 @@ class CenterPagesTest extends TestCase
         $this->assertFalse($oldYear->fresh()->is_active);
         $this->assertDatabaseHas('academic_years', ['name' => '2026 / 2027', 'is_active' => true]);
         $this->assertDatabaseHas('grades', ['name' => 'الصف الثالث الثانوي', 'sort_order' => 3]);
+    }
+
+    public function test_closed_year_is_financially_isolated_and_allows_the_same_phone_in_a_new_year(): void
+    {
+        $oldYear = AcademicYear::query()->create([
+            'name' => '2025 / 2026', 'starts_on' => '2025-09-01', 'ends_on' => '2026-06-30', 'is_active' => true,
+        ]);
+        $grade = Grade::query()->create(['name' => 'الصف الثالث الثانوي', 'sort_order' => 3]);
+        $teacher = Teacher::query()->create(['name' => 'أ. أحمد سامي']);
+        $oldSubject = Subject::query()->create([
+            'academic_year_id' => $oldYear->id, 'grade_id' => $grade->id, 'teacher_id' => $teacher->id,
+            'name' => 'رياضيات', 'fee' => 450, 'is_active' => true,
+        ]);
+
+        $this->post('/subscriptions', [
+            'student_name' => 'سارة محمد',
+            'student_phone' => '01095225454',
+            'subjects' => [[
+                'subject_id' => $oldSubject->id,
+                'paid_amount' => 450,
+                'payment_method' => 'cash',
+            ]],
+        ])->assertRedirect();
+
+        $this->post(route('academics.years.close', $oldYear), ['scope' => 'financial'])
+            ->assertRedirect(route('academics.index'));
+        $this->post(route('academics.years.close', $oldYear), ['scope' => 'academic'])
+            ->assertRedirect(route('academics.index'));
+
+        $this->assertNotNull($oldYear->fresh()->financial_closed_at);
+        $this->assertNotNull($oldYear->fresh()->academic_closed_at);
+        $this->assertFalse($oldYear->fresh()->is_active);
+
+        $this->post('/academics/years', [
+            'name' => '2026 / 2027',
+            'starts_on' => '2026-09-01',
+            'ends_on' => '2027-06-30',
+            'is_active' => '1',
+        ])->assertRedirect(route('academics.index'));
+
+        $newYear = AcademicYear::query()->where('is_active', true)->sole();
+        $newSubject = Subject::query()->create([
+            'academic_year_id' => $newYear->id, 'grade_id' => $grade->id, 'teacher_id' => $teacher->id,
+            'name' => 'رياضيات', 'fee' => 300, 'is_active' => true,
+        ]);
+
+        $this->post('/subscriptions', [
+            'student_name' => 'سارة محمد',
+            'student_phone' => '01095225454',
+            'subjects' => [[
+                'subject_id' => $newSubject->id,
+                'paid_amount' => 200,
+                'payment_method' => 'cash',
+            ]],
+        ])->assertRedirect();
+
+        $this->assertSame(2, Student::query()->where('phone', '01095225454')->count());
+        $this->assertDatabaseHas('students', ['academic_year_id' => $oldYear->id, 'phone' => '01095225454']);
+        $this->assertDatabaseHas('students', ['academic_year_id' => $newYear->id, 'phone' => '01095225454']);
+
+        $this->get(route('reports.index', ['academic_year_id' => $newYear->id, 'from' => now()->toDateString(), 'to' => now()->toDateString()]))
+            ->assertOk()
+            ->assertViewHas('collectionTotal', 200.0);
+    }
+
+    public function test_financial_closure_is_blocked_when_a_student_still_has_a_balance(): void
+    {
+        $year = AcademicYear::query()->create([
+            'name' => '2026 / 2027', 'starts_on' => '2026-09-01', 'ends_on' => '2027-06-30', 'is_active' => true,
+        ]);
+        $grade = Grade::query()->create(['name' => 'الصف الثالث الثانوي', 'sort_order' => 3]);
+        $teacher = Teacher::query()->create(['name' => 'أ. أحمد سامي']);
+        $subject = Subject::query()->create([
+            'academic_year_id' => $year->id, 'grade_id' => $grade->id, 'teacher_id' => $teacher->id,
+            'name' => 'رياضيات', 'fee' => 450, 'is_active' => true,
+        ]);
+        $student = Student::query()->create([
+            'academic_year_id' => $year->id, 'grade_id' => $grade->id, 'name' => 'سارة محمد', 'phone' => '01095225454',
+        ]);
+        Enrollment::query()->create(['student_id' => $student->id, 'subject_id' => $subject->id, 'fee' => 450]);
+
+        $this->from(route('academics.index'))
+            ->post(route('academics.years.close', $year), ['scope' => 'financial'])
+            ->assertRedirect(route('academics.index'))
+            ->assertSessionHasErrors('scope');
+
+        $this->assertNull($year->fresh()->financial_closed_at);
+    }
+
+    public function test_closed_year_blocks_subject_changes_even_if_its_route_is_requested_directly(): void
+    {
+        $administrator = User::query()->firstOrFail();
+        $year = AcademicYear::query()->create([
+            'name' => '2026 / 2027', 'starts_on' => '2026-09-01', 'ends_on' => '2027-06-30', 'is_active' => false,
+            'financial_closed_at' => now(), 'financial_closed_by' => $administrator->id,
+            'academic_closed_at' => now(), 'academic_closed_by' => $administrator->id,
+        ]);
+        $grade = Grade::query()->create(['name' => 'الصف الثالث الثانوي', 'sort_order' => 3]);
+        $subject = Subject::query()->create([
+            'academic_year_id' => $year->id, 'grade_id' => $grade->id, 'name' => 'رياضيات', 'fee' => 450, 'is_active' => true,
+        ]);
+
+        $this->from(route('academics.index'))
+            ->put(route('academics.subjects.update', $subject), ['name' => 'رياضيات متقدمة', 'fee' => 500])
+            ->assertRedirect(route('academics.index'))
+            ->assertSessionHasErrors('academic_year');
+
+        $this->assertSame('رياضيات', $subject->fresh()->name);
     }
 
     public function test_subscription_persists_student_enrollment_and_payment(): void
@@ -417,15 +632,18 @@ class CenterPagesTest extends TestCase
         $this->assertSame(1, Discount::query()->count());
     }
 
-    public function test_teacher_payout_is_persisted_with_its_period_and_executor(): void
+    public function test_teacher_payout_is_persisted_with_its_date_and_executor(): void
     {
+        $year = AcademicYear::query()->create([
+            'name' => '2026 / 2027', 'starts_on' => '2026-09-01', 'ends_on' => '2027-06-30', 'is_active' => true,
+        ]);
         $teacher = Teacher::query()->create(['name' => 'أ. أحمد سامي', 'is_active' => true]);
 
         $this->post('/teacher-payouts', [
             'teacher_id' => $teacher->id,
+            'academic_year_id' => $year->id,
             'amount' => 1250,
-            'period_from' => '2026-09-01',
-            'period_to' => '2026-09-10',
+            'payout_date' => '2026-09-10',
             'method' => 'transfer',
             'note' => 'مستحقات الأسبوع الأول',
         ])->assertRedirect(route('teacher-payouts.index'));
@@ -436,7 +654,75 @@ class CenterPagesTest extends TestCase
             'method' => 'transfer',
             'note' => 'مستحقات الأسبوع الأول',
         ]);
-        $this->assertSame(1, TeacherPayout::query()->count());
+
+        $payout = TeacherPayout::query()->sole();
+
+        $this->assertSame('2026-09-10', $payout->period_from->toDateString());
+        $this->assertSame('2026-09-10', $payout->period_to->toDateString());
+        $this->assertSame('2026-09-10', $payout->paid_at->toDateString());
+    }
+
+    public function test_teacher_payout_cannot_use_a_subject_assigned_to_another_teacher(): void
+    {
+        $year = AcademicYear::query()->create(['name' => '2026 / 2027', 'starts_on' => '2026-09-01', 'ends_on' => '2027-06-30', 'is_active' => true]);
+        $grade = Grade::query()->create(['name' => 'الصف الثالث الثانوي', 'sort_order' => 3]);
+        $firstTeacher = Teacher::query()->create(['name' => 'أ. أحمد سامي', 'is_active' => true]);
+        $secondTeacher = Teacher::query()->create(['name' => 'أ. سارة نادر', 'is_active' => true]);
+        $secondTeachersSubject = Subject::query()->create(['academic_year_id' => $year->id, 'grade_id' => $grade->id, 'teacher_id' => $secondTeacher->id, 'name' => 'لغة إنجليزية', 'fee' => 350, 'is_active' => true]);
+
+        $this->from(route('teacher-payouts.index'))->post(route('teacher-payouts.store'), [
+            'teacher_id' => $firstTeacher->id,
+            'subject_id' => $secondTeachersSubject->id,
+            'amount' => 100,
+            'payout_date' => '2026-09-12',
+            'method' => 'cash',
+        ])->assertRedirect(route('teacher-payouts.index'))
+            ->assertSessionHasErrors('subject_id');
+
+        $this->assertDatabaseCount('teacher_payouts', 0);
+    }
+
+    public function test_secretary_can_record_daily_center_income_and_expense_without_affecting_student_payments(): void
+    {
+        $year = AcademicYear::query()->create([
+            'name' => '2026 / 2027', 'starts_on' => '2026-09-01', 'ends_on' => '2027-06-30', 'is_active' => true,
+        ]);
+        $recorder = User::query()->firstOrFail();
+        $anotherUser = User::factory()->create();
+
+        $this->post(route('daily-cashbook.store'), [
+            'type' => 'income',
+            'category' => 'daily_collection',
+            'amount' => 1850,
+            'movement_date' => '2026-09-12',
+            // The submitted value is ignored: the signed-in user is always the audit collector.
+            'collector_id' => $anotherUser->id,
+            'note' => 'تحصيل الحصة المسائية',
+        ])->assertRedirect(route('daily-cashbook.index', ['from' => '2026-09-12', 'to' => '2026-09-12']));
+
+        $this->post(route('daily-cashbook.store'), [
+            'type' => 'expense',
+            'category' => 'electricity',
+            'amount' => 300,
+            'movement_date' => '2026-09-12',
+            'note' => 'فاتورة الكهرباء',
+        ])->assertRedirect(route('daily-cashbook.index', ['from' => '2026-09-12', 'to' => '2026-09-12']));
+
+        $this->assertDatabaseHas('daily_cash_movements', ['academic_year_id' => $year->id, 'type' => 'income', 'category' => 'daily_collection', 'amount' => 1850, 'collector_id' => $recorder->id, 'recorded_by' => $recorder->id]);
+        $this->assertDatabaseHas('daily_cash_movements', ['type' => 'expense', 'category' => 'electricity', 'amount' => 300]);
+        $this->assertSame(2, DailyCashMovement::query()->count());
+        $this->assertSame(0, Payment::query()->count());
+
+        $this->get(route('daily-cashbook.index', ['date' => '2026-09-12']))
+            ->assertOk()
+            ->assertSee('إيراد ومصروف اليوم')
+            ->assertSee('تحصيل الحصة المسائية')
+            ->assertSee('فاتورة الكهرباء');
+
+        $this->get('/reports?from=2026-09-12&to=2026-09-12&type=daily_expense')
+            ->assertOk()
+            ->assertSee('فاتورة الكهرباء')
+            ->assertDontSee('تحصيل الحصة المسائية');
     }
 
     public function test_reports_filter_the_audit_log_by_movement_type(): void
@@ -449,7 +735,7 @@ class CenterPagesTest extends TestCase
         $student = Student::query()->create(['academic_year_id' => $year->id, 'grade_id' => $grade->id, 'name' => 'سارة محمد', 'phone' => '01095225454']);
         $enrollment = Enrollment::query()->create(['student_id' => $student->id, 'subject_id' => $subject->id, 'fee' => 450, 'discount_amount' => 0]);
         Payment::query()->create(['student_id' => $student->id, 'enrollment_id' => $enrollment->id, 'received_by' => $user->id, 'amount' => 250, 'method' => 'cash', 'receipt_number' => 'TEST-PAYMENT-001', 'paid_at' => now()]);
-        TeacherPayout::query()->create(['teacher_id' => $teacher->id, 'paid_by' => $user->id, 'amount' => 100, 'period_from' => now()->startOfMonth(), 'period_to' => now(), 'method' => 'cash', 'note' => 'مستحقات اختبارية', 'paid_at' => now()]);
+        TeacherPayout::query()->create(['academic_year_id' => $year->id, 'teacher_id' => $teacher->id, 'paid_by' => $user->id, 'amount' => 100, 'period_from' => now()->startOfMonth(), 'period_to' => now(), 'method' => 'cash', 'note' => 'مستحقات اختبارية', 'paid_at' => now()]);
 
         $this->get('/reports?type=collection')
             ->assertOk()

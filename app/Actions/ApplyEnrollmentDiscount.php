@@ -5,6 +5,7 @@ namespace App\Actions;
 use App\Models\Discount;
 use App\Models\Enrollment;
 use App\Models\User;
+use App\Support\AcademicYearLedger;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -13,7 +14,8 @@ class ApplyEnrollmentDiscount
     public function handle(int $enrollmentId, string $type, float $value, string $reason, User $approver): Discount
     {
         return DB::transaction(function () use ($enrollmentId, $type, $value, $reason, $approver): Discount {
-            $enrollment = Enrollment::query()->with('payments')->lockForUpdate()->findOrFail($enrollmentId);
+            $enrollment = Enrollment::query()->with(['payments', 'subject.academicYear'])->lockForUpdate()->findOrFail($enrollmentId);
+            AcademicYearLedger::ensureOpen($enrollment->subject->academicYear);
 
             if ($type === 'percentage' && $value > 100) {
                 throw ValidationException::withMessages(['value' => 'لا يمكن أن تتجاوز نسبة الخصم 100%.']);

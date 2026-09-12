@@ -2,7 +2,7 @@
 
 @section('content')
 <section class="screen" aria-labelledby="teacher-portal-title">
-    <x-page-header title="موادي وطلابي" subtitle="عرض المواد المسندة إليك وحالة سداد الطلاب — دون صلاحيات مالية أو إدارية." />
+    <x-page-header title="موادي وطلابي" subtitle="عرض المواد المسندة إليك وحالة سداد الطلاب — دون صلاحيات مالية أو إدارية." title-id="teacher-portal-title" />
     <div class="entity-grid">
         @forelse ($teacher->subjects as $subject)
             <article class="panel entity-card">
@@ -22,7 +22,7 @@
                 @forelse ($subject->enrollments as $enrollment)
                     @php($paid = (float) $enrollment->payments->sum('amount'))
                     @php($remaining = (float) $enrollment->fee - (float) $enrollment->discount_amount - $paid)
-                    <tr><td class="strong">{{ $enrollment->student->name }}</td><td>{{ number_format($paid, 2) }} ج.م</td><td class="{{ $remaining > 0 ? 'amount-due' : 'amount-ok' }}">{{ number_format($remaining, 2) }} ج.م</td><td class="muted">{{ $enrollment->payments->sortByDesc('paid_at')->first()?->paid_at?->translatedFormat('j F Y') ?? 'لا توجد دفعات' }}</td></tr>
+                    <tr><td class="strong">{{ $enrollment->student->name }}</td><td>{{ number_format($paid, 2) }} ج.م</td><td class="{{ $remaining > 0 ? 'amount-due' : 'amount-ok' }}">{{ number_format($remaining, 2) }} ج.م</td><td class="muted" dir="ltr">{{ $enrollment->payments->isNotEmpty() ? \App\Support\DatePresenter::date($enrollment->payments->sortByDesc('paid_at')->first()->paid_at) : 'لا توجد دفعات' }}</td></tr>
                 @empty<tr><td colspan="4" class="muted">لا يوجد طلاب مسجلون بعد.</td></tr>@endforelse
             </tbody></table></div>
         </section>

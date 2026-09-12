@@ -26,7 +26,9 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/academics', [CenterPageController::class, 'academics'])->middleware('permission:academics')->name('academics.index');
     Route::post('/academics/subjects', [CenterPageController::class, 'storeSubject'])->middleware('permission:academics')->name('academics.subjects.store');
     Route::put('/academics/subjects/{subject}', [CenterPageController::class, 'updateSubject'])->whereNumber('subject')->middleware('permission:academics')->name('academics.subjects.update');
+    Route::delete('/academics/subjects/{subject}', [CenterPageController::class, 'destroySubject'])->whereNumber('subject')->middleware('permission:academics')->name('academics.subjects.destroy');
     Route::post('/academics/years', [CenterPageController::class, 'storeAcademicYear'])->middleware('permission:academics')->name('academics.years.store');
+    Route::post('/academics/years/{academicYear}/close', [CenterPageController::class, 'closeAcademicYear'])->whereNumber('academicYear')->middleware('permission:settings')->name('academics.years.close');
     Route::post('/academics/grades', [CenterPageController::class, 'storeGrade'])->middleware('permission:academics')->name('academics.grades.store');
     Route::get('/teachers', [CenterPageController::class, 'teachers'])->middleware('permission:academics')->name('teachers.index');
     Route::post('/teachers', [CenterPageController::class, 'storeTeacher'])->middleware('permission:academics')->name('teachers.store');
@@ -40,6 +42,8 @@ Route::middleware('auth')->group(function (): void {
     Route::post('/collections', [CenterPageController::class, 'storeCollection'])->middleware('permission:collections')->name('collections.store');
     Route::get('/discounts', [CenterPageController::class, 'discounts'])->middleware('permission:discounts')->name('discounts.index');
     Route::post('/discounts', [CenterPageController::class, 'storeDiscount'])->middleware('permission:discounts')->name('discounts.store');
+    Route::get('/daily-cashbook', [CenterPageController::class, 'dailyCashbook'])->middleware('permission:collections')->name('daily-cashbook.index');
+    Route::post('/daily-cashbook', [CenterPageController::class, 'storeDailyCashMovement'])->middleware('permission:collections')->name('daily-cashbook.store');
     Route::get('/teacher-payouts', [CenterPageController::class, 'payouts'])->middleware('permission:payouts')->name('teacher-payouts.index');
     Route::post('/teacher-payouts', [CenterPageController::class, 'storePayout'])->middleware('permission:payouts')->name('teacher-payouts.store');
     Route::get('/profile', [CenterPageController::class, 'profile'])->name('profile.edit');

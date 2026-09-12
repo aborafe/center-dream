@@ -2,7 +2,7 @@
 
 @section('content')
 <section class="screen" aria-labelledby="collection-title">
-    <x-page-header title="تحصيل دفعة" subtitle="اختر اشتراكًا قائمًا وسجّل دفعة جديدة مع وصل قابل للطباعة." />
+    <x-page-header title="تحصيل دفعة" subtitle="اختر اشتراكًا قائمًا وسجّل دفعة جديدة مع وصل قابل للطباعة." title-id="collection-title" />
     <form class="panel collection-form" method="POST" action="{{ route('collections.store') }}">
         @csrf
         <input type="hidden" name="submission_token" value="{{ $submissionToken }}">

@@ -2,7 +2,7 @@
 
 @section('content')
 <section class="screen" aria-labelledby="users-title">
-    <x-page-header title="المستخدمون والصلاحيات" subtitle="أنشئ الحسابات، وراجع بيانات الدخول وحالة كل مستخدم." />
+    <x-page-header title="المستخدمون والصلاحيات" subtitle="أنشئ الحسابات، وراجع بيانات الدخول وحالة كل مستخدم." title-id="users-title" />
     <form class="panel account-form" method="POST" action="{{ route('users.store') }}">
         @csrf
         <h2 id="users-title">إنشاء مستخدم</h2>

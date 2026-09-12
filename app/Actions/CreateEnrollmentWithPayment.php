@@ -7,6 +7,7 @@ use App\Models\Payment;
 use App\Models\Student;
 use App\Models\Subject;
 use App\Models\User;
+use App\Support\AcademicYearLedger;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -19,15 +20,17 @@ class CreateEnrollmentWithPayment
         return DB::transaction(function () use ($data, $receiver): Collection {
             $subjects = Subject::query()->whereKey(collect($data['subjects'])->pluck('subject_id'))->get()->keyBy('id');
             $firstSubject = $subjects->firstOrFail();
+            $academicYear = AcademicYearLedger::active();
+            AcademicYearLedger::ensureOpen($academicYear);
 
-            if ($subjects->count() !== count($data['subjects']) || $subjects->contains(fn (Subject $subject): bool => $subject->academic_year_id !== $firstSubject->academic_year_id || $subject->grade_id !== $firstSubject->grade_id)) {
+            if ($subjects->count() !== count($data['subjects']) || $firstSubject->academic_year_id !== $academicYear->id || $subjects->contains(fn (Subject $subject): bool => $subject->academic_year_id !== $firstSubject->academic_year_id || $subject->grade_id !== $firstSubject->grade_id)) {
                 throw ValidationException::withMessages(['subjects' => 'اختر موادًا من نفس السنة الدراسية والصف.']);
             }
 
             $phone = $this->normalizeEgyptianPhone($data['student_phone']);
 
             $student = Student::query()->firstOrCreate(
-                ['phone' => $phone],
+                ['academic_year_id' => $firstSubject->academic_year_id, 'phone' => $phone],
                 [
                     'name' => $data['student_name'],
                     'academic_year_id' => $firstSubject->academic_year_id,
@@ -35,7 +38,7 @@ class CreateEnrollmentWithPayment
                 ],
             );
 
-            if ($student->academic_year_id !== $firstSubject->academic_year_id || $student->grade_id !== $firstSubject->grade_id) {
+            if ($student->grade_id !== $firstSubject->grade_id) {
                 throw ValidationException::withMessages([
                     'subjects' => 'بيانات الطالب المسجلة لا تتوافق مع سنة وصف المواد المختارة.',
                 ]);

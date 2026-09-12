@@ -3,15 +3,15 @@
 @section('content')
 <section class="screen is-active" id="dashboard">
     <header class="business-page-head">
-        <div><p class="eyebrow">نظرة مالية يومية</p><h1>لوحة الحسابات</h1><p>{{ now()->translatedFormat('l، j F Y') }} · آخر تحديث الآن</p></div>
+        <div><p class="eyebrow">نظرة مالية يومية</p><h1>لوحة الحسابات</h1><p dir="ltr">{{ \App\Support\DatePresenter::date(now()) }} · آخر تحديث الآن</p></div>
         <div class="page-actions"><a class="outline-button" href="{{ route('reports.index') }}">عرض التقرير</a><a class="primary-button" href="{{ route('subscriptions.create') }}">تسجيل اشتراك</a></div>
     </header>
 
     <section class="cash-overview" aria-label="ملخص المبالغ">
-        <article class="cash-card cash-card-primary"><span>تحصيل اليوم</span><strong>{{ number_format($todayCollections, 2) }} <small>ج.م</small></strong><p>{{ $todayPaymentCount }} حركة تحصيل مسجلة</p></article>
-        <article class="cash-card"><span>مديونيات الطلاب</span><strong>{{ number_format($studentDebt, 2) }} <small>ج.م</small></strong><p class="warning-text">{{ $studentsWithDebt }} طلاب بحاجة متابعة</p></article>
-        <article class="cash-card"><span>خصومات اليوم</span><strong>{{ number_format($todayDiscounts, 2) }} <small>ج.م</small></strong><p>{{ $todayDiscountCount }} عمليات معتمدة</p></article>
-        <article class="cash-card"><span>مواد نشطة</span><strong>{{ $activeSubjectCount }}</strong><p>مواد متاحة للتسجيل الآن</p></article>
+        <a class="cash-card cash-card-primary dashboard-card-link" href="{{ route('reports.index', ['from' => now()->toDateString(), 'to' => now()->toDateString()]) }}#movements" aria-label="عرض جدول تحصيل وحركات اليوم"><span>تحصيل اليوم</span><strong>{{ number_format($todayCollections, 2) }} <small>ج.م</small></strong><p>{{ $todayPaymentCount }} حركة تحصيل مسجلة <b>عرض التفاصيل</b></p></a>
+        <a class="cash-card dashboard-card-link" href="{{ route('students.index', ['account' => 'due']) }}" aria-label="عرض جدول مديونيات الطلاب"><span>مديونيات الطلاب</span><strong>{{ number_format($studentDebt, 2) }} <small>ج.م</small></strong><p class="warning-text">{{ $studentsWithDebt }} طلاب بحاجة متابعة <b>عرض الطلاب</b></p></a>
+        <a class="cash-card dashboard-card-link" href="{{ route('discounts.index', ['date' => now()->toDateString()]) }}" aria-label="عرض جدول خصومات اليوم"><span>خصومات اليوم</span><strong>{{ number_format($todayDiscounts, 2) }} <small>ج.م</small></strong><p>{{ $todayDiscountCount }} عمليات معتمدة <b>عرض التفاصيل</b></p></a>
+        <a class="cash-card dashboard-card-link" href="{{ route('inventory.index') }}" aria-label="عرض كل المواد النشطة"><span>مواد نشطة</span><strong>{{ $activeSubjectCount }}</strong><p>مواد متاحة للتسجيل الآن <b>عرض المواد</b></p></a>
     </section>
 
     <section class="panel recent-panel">

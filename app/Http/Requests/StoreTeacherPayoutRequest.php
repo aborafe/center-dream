@@ -17,8 +17,7 @@ class StoreTeacherPayoutRequest extends FormRequest
             'teacher_id' => ['required', 'integer', 'exists:teachers,id'],
             'subject_id' => ['nullable', 'integer', 'exists:subjects,id'],
             'amount' => ['required', 'numeric', 'gt:0'],
-            'period_from' => ['required', 'date'],
-            'period_to' => ['required', 'date', 'after_or_equal:period_from'],
+            'payout_date' => ['required', 'date'],
             'method' => ['required', 'in:cash,transfer,wallet'],
             'note' => ['nullable', 'string', 'max:255'],
         ];

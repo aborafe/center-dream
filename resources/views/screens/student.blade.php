@@ -39,8 +39,31 @@
     @if (auth()->user()->hasPermission('discounts'))
         <section class="panel discount-inline"><div><h2>خصم على اشتراك</h2><p>اختر المادة ثم أدخل قيمة الخصم وسببه.</p></div><form method="POST" action="{{ route('discounts.store') }}">@csrf<input type="hidden" name="return_to_student" value="1"><div class="form-grid"><div class="field-group"><label for="discount-enrollment">المادة</label><select id="discount-enrollment" name="enrollment_id" required>@foreach ($enrollments->whereNull('cancelled_at') as $enrollment)<option value="{{ $enrollment->id }}">{{ $enrollment->subject->name }} · المتبقي {{ number_format(max(0, $enrollment->fee - $enrollment->discount_amount - $enrollment->payments->sum('amount')), 2) }} ج.م</option>@endforeach</select></div><div class="field-group"><label for="discount-type">نوع الخصم</label><select id="discount-type" name="type"><option value="amount">مبلغ</option><option value="percentage">نسبة مئوية</option></select></div><x-input label="قيمة الخصم" name="value" type="number" min="0.01" step="0.01" required/><x-input label="سبب الخصم" name="reason" placeholder="مثال: خصم أخوات" required/></div><button class="primary-button form-save" type="submit">اعتماد الخصم</button></form></section>
     @endif
-    <section class="panel structured-list"><div class="panel-heading"><h2>سجل المبالغ المردودة</h2><span class="muted">تظهر أيضًا ضمن تقرير الحركات المالية.</span></div><div class="table-wrap"><table><thead><tr><th>المادة</th><th>المبلغ</th><th>الطريقة</th><th>التاريخ</th><th>المنفذ</th><th>ملاحظة</th></tr></thead><tbody>@forelse ($refunds as $refund)<tr><td class="strong">{{ $refund->enrollment->subject->name }}</td><td class="amount-due">{{ number_format($refund->amount, 2) }} ج.م</td><td>{{ ['cash' => 'نقدي', 'transfer' => 'تحويل', 'wallet' => 'محفظة'][$refund->method] }}</td><td>{{ $refund->refunded_at->translatedFormat('j F Y') }}</td><td>{{ $refund->processor->name }}</td><td>{{ $refund->note ?: '—' }}</td></tr>@empty<tr><td colspan="6" class="muted">لا توجد مبالغ مردودة لهذا الطالب.</td></tr>@endforelse</tbody></table></div></section>
-    <dialog id="edit-student" class="form-dialog" @if (request()->boolean('edit')) data-auto-dialog @endif><form method="POST" action="{{ route('students.update', $student['id']) }}">@csrf @method('PUT')<div class="panel-heading"><h2>تعديل بيانات الطالب</h2><button class="icon-button" type="button" data-close-dialog aria-label="إغلاق">×</button></div><div class="form-grid"><x-input label="اسم الطالب" name="name" :value="$student['name']" required/><x-input label="رقم الهاتف" name="phone" type="tel" :value="$student['phone']" required/><x-input label="اسم ولي الأمر" name="guardian_name" :value="$student['guardian_name']"/><x-input label="هاتف ولي الأمر" name="guardian_phone" type="tel" :value="$student['guardian_phone']"/></div><div class="form-field"><label for="student-note">ملاحظات الطالب</label><textarea id="student-note" name="note" rows="3">{{ $student['note'] }}</textarea></div><div class="dialog-actions"><button class="primary-button" type="submit">حفظ التعديل</button><button class="chip" type="button" data-close-dialog>إلغاء</button></div></form></dialog>
+    <section class="panel structured-list"><div class="panel-heading"><h2>سجل المبالغ المردودة</h2><span class="muted">تظهر أيضًا ضمن تقرير الحركات المالية.</span></div><div class="table-wrap"><table><thead><tr><th>المادة</th><th>المبلغ</th><th>الطريقة</th><th>التاريخ</th><th>المنفذ</th><th>ملاحظة</th></tr></thead><tbody>@forelse ($refunds as $refund)<tr><td class="strong">{{ $refund->enrollment->subject->name }}</td><td class="amount-due">{{ number_format($refund->amount, 2) }} ج.م</td><td>{{ ['cash' => 'نقدي', 'transfer' => 'تحويل', 'wallet' => 'محفظة'][$refund->method] }}</td><td dir="ltr">{{ \App\Support\DatePresenter::date($refund->refunded_at) }}</td><td>{{ $refund->processor->name }}</td><td>{{ $refund->note ?: '—' }}</td></tr>@empty<tr><td colspan="6" class="muted">لا توجد مبالغ مردودة لهذا الطالب.</td></tr>@endforelse</tbody></table></div></section>
+    <dialog id="edit-student" class="form-dialog" @if (request()->boolean('edit')) data-auto-dialog @endif>
+        <form method="POST" action="{{ route('students.update', $student['id']) }}">
+            @csrf
+            @method('PUT')
+            <div class="panel-heading dialog-heading">
+                <h2>تعديل بيانات الطالب</h2>
+                <button class="icon-button dialog-close" type="button" data-close-dialog aria-label="إغلاق نافذة تعديل الطالب" title="إغلاق">
+                    <x-icon name="close" />
+                </button>
+            </div>
+            <div class="form-grid">
+                <x-input label="اسم الطالب" name="name" :value="$student['name']" autocomplete="name" required />
+                <x-input label="رقم الهاتف" name="phone" type="tel" :value="$student['phone']" autocomplete="tel" inputmode="tel" required />
+            </div>
+            <div class="form-field">
+                <label for="student-note">ملاحظات الطالب</label>
+                <textarea id="student-note" name="note" rows="3" autocomplete="off">{{ $student['note'] }}</textarea>
+            </div>
+            <div class="dialog-actions">
+                <button class="primary-button" type="submit">حفظ التعديل</button>
+                <button class="chip" type="button" data-close-dialog>إلغاء</button>
+            </div>
+        </form>
+    </dialog>
     @if ($completedPayment)
         @php($paymentMessage = 'تم استلام '.number_format((float) $completedPayment->amount, 2).' ج.م من '.$completedPayment->student->name.' لحساب مادة '.$completedPayment->enrollment->subject->name.'. رقم الوصل: '.$completedPayment->receipt_number)
         <dialog class="success-dialog" data-auto-dialog aria-labelledby="student-collection-success"><div class="success-mark">✓</div><h2 id="student-collection-success">تم التحصيل بنجاح</h2><p>{{ $paymentMessage }}</p><div class="dialog-actions"><a class="primary-button" href="{{ route('receipts.show', ['payment' => $completedPayment, 'size' => request()->query('size', 'A5')]) }}" target="_blank">طباعة الوصل</a><a class="outline-button" href="https://wa.me/{{ $whatsAppPhone }}?text={{ urlencode($paymentMessage) }}" target="_blank" rel="noopener">إرسال واتساب</a><button class="chip" type="button" data-close-dialog>إغلاق</button></div></dialog>

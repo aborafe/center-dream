@@ -5,6 +5,7 @@ namespace App\Actions;
 use App\Models\Enrollment;
 use App\Models\Payment;
 use App\Models\User;
+use App\Support\AcademicYearLedger;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -17,7 +18,8 @@ class RecordEnrollmentPayment
             if ($existing) {
                 return $existing;
             }
-            $enrollment = Enrollment::query()->with('payments')->lockForUpdate()->findOrFail($enrollmentId);
+            $enrollment = Enrollment::query()->with(['payments', 'subject.academicYear'])->lockForUpdate()->findOrFail($enrollmentId);
+            AcademicYearLedger::ensureOpen($enrollment->subject->academicYear);
             if ($enrollment->cancelled_at) {
                 throw ValidationException::withMessages(['enrollment_id' => 'لا يمكن تحصيل دفعة من اشتراك ملغى.']);
             }

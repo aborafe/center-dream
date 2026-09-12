@@ -27,6 +27,10 @@ class LoginController extends Controller
         Auth::login($user);
         $request->session()->regenerate();
 
+        if ($user->hasRole('teacher')) {
+            return redirect()->route('teacher.portal');
+        }
+
         return redirect()->intended(route('dashboard'));
     }
 

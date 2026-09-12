@@ -73,7 +73,10 @@ class DemoDataSeeder extends Seeder
         $omarMath->update(['cancelled_at' => now()->subDay(), 'refund_amount' => 100, 'refund_note' => 'إلغاء قبل بداية المجموعة']);
         Refund::query()->firstOrCreate(['enrollment_id' => $omarMath->id, 'note' => 'إلغاء قبل بداية المجموعة'], ['student_id' => $omar->id, 'refunded_by' => $admin->id, 'amount' => 100, 'method' => 'cash', 'refunded_at' => now()->subDay()]);
 
-        TeacherPayout::query()->firstOrCreate(['teacher_id' => $mathTeacher->id, 'note' => 'صرف الأسبوع الأول — بيانات عرض'], ['paid_by' => $admin->id, 'amount' => 500, 'period_from' => now()->startOfMonth(), 'period_to' => now(), 'method' => 'transfer', 'paid_at' => now()->subDay()]);
+        TeacherPayout::query()->updateOrCreate(
+            ['teacher_id' => $mathTeacher->id, 'note' => 'صرف الأسبوع الأول — بيانات عرض'],
+            ['academic_year_id' => $year->id, 'paid_by' => $admin->id, 'amount' => 500, 'period_from' => now()->startOfMonth(), 'period_to' => now(), 'method' => 'transfer', 'paid_at' => now()->subDay()],
+        );
     }
 
     private function user(string $name, string $email, string $phone, Role $role, ?string $jobTitle = null): User
@@ -91,7 +94,10 @@ class DemoDataSeeder extends Seeder
 
     private function student(AcademicYear $year, Grade $grade, string $name, string $phone, string $guardian): Student
     {
-        return Student::query()->updateOrCreate(['phone' => $phone], ['academic_year_id' => $year->id, 'grade_id' => $grade->id, 'name' => $name, 'guardian_name' => $guardian, 'guardian_phone' => $phone, 'note' => 'بيانات عرض لاختبار واجهة المركز.']);
+        return Student::query()->updateOrCreate(
+            ['academic_year_id' => $year->id, 'phone' => $phone],
+            ['grade_id' => $grade->id, 'name' => $name, 'guardian_name' => $guardian, 'guardian_phone' => $phone, 'note' => 'بيانات عرض لاختبار واجهة المركز.'],
+        );
     }
 
     private function enrollment(Student $student, Subject $subject, float $fee): Enrollment

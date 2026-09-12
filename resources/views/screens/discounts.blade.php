@@ -2,7 +2,7 @@
 
 @section('content')
 <section class="screen" aria-labelledby="discounts-title">
-    <x-page-header title="الخصومات" subtitle="سجل الخصومات المعتمدة على اشتراكات الطلاب." />
+    <x-page-header title="الخصومات" subtitle="سجل الخصومات المعتمدة على اشتراكات الطلاب." title-id="discounts-title" />
     @if ($enrollments->isNotEmpty())
     <form class="panel collection-form" method="POST" action="{{ route('discounts.store') }}">
         @csrf
@@ -25,9 +25,10 @@
     @endif
     <section class="panel structured-list">
         <div class="panel-heading"><div><p class="eyebrow">سجل مالي</p><h2>الخصومات المسجلة</h2></div><span class="muted">تظهر العملية مع صاحب الاعتماد.</span></div>
+        @if ($discountDate)<p class="filter-context">يعرض الجدول خصومات يوم {{ \App\Support\DatePresenter::date($discountDate) }} فقط. <a href="{{ route('discounts.index') }}">عرض كل الخصومات</a></p>@endif
         <div class="table-wrap"><table><thead><tr><th>الطالب</th><th>المادة</th><th>نوع الخصم</th><th>القيمة</th><th>المبلغ</th><th>اعتمدها</th><th>السبب</th></tr></thead><tbody>
             @forelse ($discounts as $discount)
-                <tr><td class="strong">{{ $discount->enrollment->student->name }}</td><td>{{ $discount->enrollment->subject->name }}</td><td>{{ $discount->type === 'percentage' ? 'نسبة' : 'قيمة' }}</td><td>{{ $discount->type === 'percentage' ? $discount->value.'%' : number_format((float) $discount->value, 2).' ج.م' }}</td><td class="amount-ok">{{ number_format((float) $discount->amount, 2) }} ج.م</td><td>{{ $discount->approver?->name ?? 'غير محدد' }}</td><td>{{ $discount->reason }}</td></tr>
+                <tr><td class="strong"><a class="student-link" href="{{ route('students.show', $discount->enrollment->student) }}">{{ $discount->enrollment->student->name }}</a></td><td>{{ $discount->enrollment->subject->name }}</td><td>{{ $discount->type === 'percentage' ? 'نسبة' : 'قيمة' }}</td><td>{{ $discount->type === 'percentage' ? $discount->value.'%' : number_format((float) $discount->value, 2).' ج.م' }}</td><td class="amount-ok">{{ number_format((float) $discount->amount, 2) }} ج.م</td><td>{{ $discount->approver?->name ?? 'غير محدد' }}</td><td>{{ $discount->reason }}</td></tr>
             @empty
                 <tr><td colspan="7" class="muted">لا توجد خصومات مسجلة حتى الآن.</td></tr>
             @endforelse

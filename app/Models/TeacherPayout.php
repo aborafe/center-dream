@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class TeacherPayout extends Model
 {
-    protected $fillable = ['teacher_id', 'subject_id', 'paid_by', 'amount', 'period_from', 'period_to', 'method', 'note', 'paid_at'];
+    protected $fillable = ['teacher_id', 'academic_year_id', 'subject_id', 'paid_by', 'amount', 'period_from', 'period_to', 'method', 'note', 'paid_at'];
 
     protected function casts(): array
     {
@@ -17,6 +17,11 @@ class TeacherPayout extends Model
     public function teacher(): BelongsTo
     {
         return $this->belongsTo(Teacher::class);
+    }
+
+    public function academicYear(): BelongsTo
+    {
+        return $this->belongsTo(AcademicYear::class);
     }
 
     public function payer(): BelongsTo

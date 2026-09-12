@@ -36,6 +36,14 @@ npm run build
 php artisan serve
 ```
 
+لعرض تجريبي كبير أمام الإدارة، استخدم بدلًا من ذلك:
+
+```bash
+php artisan db:seed --class=LargeDemoDataSeeder
+```
+
+الـSeeder الموسّع آمن للتكرار ولا يضاعف السجلات عند تشغيله مرة أخرى. يجهّز 180 طالبًا، 14 مدرسًا، 18 مادة، 405 اشتراكًا، دفعات وخصومات وردود وصرف مدرسين و40 حركة في دفتر اليوم.
+
 افتح `http://127.0.0.1:8000/login`.
 
 ## حسابات الديمو
@@ -59,6 +67,10 @@ php artisan serve
 APP_ENV=production
 APP_DEBUG=false
 APP_URL=https://your-domain.example
+LOG_LEVEL=warning
+SESSION_SECURE_COOKIE=true
+SESSION_SAME_SITE=lax
+DEMO_SEEDER_ENABLED=false
 ```
 
 واجعل مجلد الموقع العام يشير إلى `public`، ثم شغّل:
@@ -66,14 +78,16 @@ APP_URL=https://your-domain.example
 ```bash
 composer install --no-dev --optimize-autoloader
 php artisan migrate --force
-php artisan config:clear
-php artisan db:seed --class=DemoDataSeeder --force
+php artisan db:seed --force
+php artisan center:create-admin
 npm ci
 npm run build
+php artisan storage:link
+chmod -R ug+rwx storage bootstrap/cache
 php artisan optimize
 ```
 
-لإنشاء بيانات العرض على إنتاج للمرة الأولى فقط، اضبط `DEMO_SEEDER_ENABLED=true` في `.env` قبل أمر الـSeeder، ثم أعده فورًا إلى `false` وشغّل `php artisan config:cache`.
+لا تشغّل `DemoDataSeeder` في الإنتاج؛ فهو ينشئ حسابات عرض معروفة. أنشئ أول مدير عبر عملية إعداد موثقة أو أمر إداري آمن، ثم غيّر كلمة المرور فورًا. إذا استُخدمت بيانات العرض مؤقتًا في بيئة تجريبية فقط، اضبط `DEMO_SEEDER_ENABLED=true` قبل الأمر وأعده إلى `false` ثم شغّل `php artisan config:cache`.
 
 ## الاختبارات
 

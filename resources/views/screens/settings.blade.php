@@ -2,7 +2,7 @@
 
 @section('content')
 <section class="screen" id="settings" aria-labelledby="settings-title">
-    <x-page-header title="إعدادات المركز" subtitle="عدّل معلومات المركز والتفضيلات المستخدمة داخل النظام." />
+    <x-page-header title="إعدادات المركز" subtitle="عدّل معلومات المركز والتفضيلات المستخدمة داخل النظام." title-id="settings-title" />
     <form class="panel account-form" method="POST" action="{{ route('settings.update') }}">
         @csrf @method('PUT')
         <h2 id="settings-title">بيانات المركز</h2>

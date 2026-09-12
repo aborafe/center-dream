@@ -2,7 +2,7 @@
 
 @section('content')
 <section class="screen" aria-labelledby="teachers-title">
-    <x-page-header title="المدرسون" subtitle="تابع المحفظة والمواد، وعدّل حالة كل مدرس من نفس الصفحة." />
+    <x-page-header title="المدرسون" subtitle="تابع المحفظة والمواد، وعدّل حالة كل مدرس من نفس الصفحة." title-id="teachers-title" />
 
     <form class="panel account-form" method="POST" action="{{ route('teachers.store') }}">
         @csrf
