@@ -944,10 +944,14 @@ class CenterPagesTest extends TestCase
         $this->get(route('reports.whatsapp', $filters))
             ->assertOk()
             ->assertSee('مدير الاختبار')
-            ->assertSee('متابعة إلى واتساب');
+            ->assertSee('فتح واتساب لإرفاق المستند')
+            ->assertSee('رقم واتساب آخر');
 
         $response = $this->get(route('reports.whatsapp.redirect', [...$filters, 'recipient_type' => 'user', 'recipient_id' => $recipient->id]));
         $response->assertRedirect();
-        $this->assertStringStartsWith('https://wa.me/201012345678?text=', (string) $response->headers->get('Location'));
+        $this->assertSame('https://wa.me/201012345678', (string) $response->headers->get('Location'));
+
+        $this->get(route('reports.whatsapp.redirect', [...$filters, 'recipient_type' => 'custom', 'recipient_phone' => '+201055555555']))
+            ->assertRedirect('https://wa.me/201055555555');
     }
 }

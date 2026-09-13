@@ -771,14 +771,55 @@ function setupReportRecipientPicker() {
         return;
     }
 
+    const customPhone = picker.querySelector('[data-custom-recipient-phone]');
+    const customInput = picker.querySelector('[data-custom-recipient-input]');
+
     picker.querySelectorAll('[data-recipient-type]').forEach((radio) => {
         radio.addEventListener('change', () => {
             picker.querySelectorAll('[data-recipient-id]').forEach((input) => {
                 input.disabled = true;
             });
-            radio.parentElement.querySelector('[data-recipient-id]').disabled = false;
+            const recipientId = radio.parentElement.querySelector('[data-recipient-id]');
+
+            if (recipientId) {
+                recipientId.disabled = false;
+            }
+
+            const isCustomRecipient = radio.value === 'custom';
+            customPhone.hidden = !isCustomRecipient;
+            customInput.disabled = !isCustomRecipient;
+
+            if (isCustomRecipient) {
+                customInput.focus();
+            }
         });
     });
+
+    const selected = picker.querySelector('[data-recipient-type]:checked');
+
+    if (selected) {
+        selected.dispatchEvent(new Event('change'));
+    }
+}
+
+function setupCollectionDestination() {
+    const enrollment = document.querySelector('[data-collection-enrollment]');
+    const destination = document.querySelector('[data-collection-destination]');
+
+    if (!enrollment || !destination) {
+        return;
+    }
+
+    const update = () => {
+        const teacher = enrollment.selectedOptions[0]?.dataset.teacher;
+
+        destination.textContent = teacher
+            ? `جهة الإيداع: حساب السنتر. تُسجل قيمة المادة ضمن مستحقات ${teacher} حتى وقت الصرف.`
+            : 'جهة الإيداع: حساب السنتر بالكامل. لا توجد مستحقات مدرس لهذه المادة.';
+    };
+
+    enrollment.addEventListener('change', update);
+    update();
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -793,4 +834,5 @@ document.addEventListener('DOMContentLoaded', () => {
     setupTableFilters();
     setupDateRangePicker();
     setupReportRecipientPicker();
+    setupCollectionDestination();
 });

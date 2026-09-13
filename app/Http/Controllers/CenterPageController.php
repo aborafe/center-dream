@@ -300,34 +300,32 @@ class CenterPageController extends Controller
     public function redirectReportToWhatsApp(Request $request): RedirectResponse
     {
         $data = $request->validate([
-            'recipient_type' => ['required', 'in:user,teacher'],
-            'recipient_id' => ['required', 'integer'],
+            'recipient_type' => ['required', 'in:user,teacher,custom'],
+            'recipient_id' => ['nullable', 'integer', 'required_unless:recipient_type,custom'],
+            'recipient_phone' => ['nullable', 'string', 'max:30', 'required_if:recipient_type,custom'],
         ]);
-        $recipient = $data['recipient_type'] === 'teacher'
-            ? Teacher::query()->findOrFail($data['recipient_id'])
-            : User::query()->findOrFail($data['recipient_id']);
-        $digits = preg_replace('/\D+/', '', (string) $recipient->phone) ?? '';
+        $phone = $data['recipient_phone'] ?? null;
+
+        if ($data['recipient_type'] !== 'custom') {
+            $recipient = $data['recipient_type'] === 'teacher'
+                ? Teacher::query()->findOrFail($data['recipient_id'])
+                : User::query()->findOrFail($data['recipient_id']);
+            $phone = $recipient->phone;
+        }
+
+        $digits = preg_replace('/\D+/', '', (string) $phone) ?? '';
 
         if ($digits === '') {
-            return back()->withInput()->withErrors(['recipient_id' => 'لا يوجد رقم واتساب صالح للمستلم المختار.']);
+            return back()->withInput()->withErrors(['recipient_phone' => 'أدخل رقم واتساب صالحًا للمستلم.']);
         }
 
         if (str_starts_with($digits, '20')) {
             $digits = substr($digits, 2);
         }
 
-        $report = $this->reports($request)->getData();
-        $message = implode("\n", [
-            'تقرير '.$this->centerSettings()->center_name,
-            'الفترة: '.$report['periodLabel'],
-            'إجمالي التحصيل: '.number_format($report['collectionTotal'], 2).' ج.م',
-            'صرف المدرسين: '.number_format($report['teacherPayoutTotal'], 2).' ج.م',
-            'إيرادات السنتر: '.number_format($report['dailyIncomeTotal'], 2).' ج.م',
-            'مصروفات السنتر: '.number_format($report['dailyExpenseTotal'], 2).' ج.م',
-            'صافي التحصيل: '.number_format($report['netCollections'], 2).' ج.م',
-        ]);
-
-        return redirect()->away('https://wa.me/20'.ltrim($digits, '0').'?text='.rawurlencode($message));
+        // A wa.me link can open a chat but cannot attach a file. Keep the chat empty so the
+        // operator attaches the PDF created from the report preview instead of sending a summary.
+        return redirect()->away('https://wa.me/20'.ltrim($digits, '0'));
     }
 
     public function storeSubject(StoreSubjectRequest $request, CreateSubject $createSubject): RedirectResponse
@@ -721,7 +719,7 @@ class CenterPageController extends Controller
 
         return view('screens.collections', [
             'enrollments' => Enrollment::query()
-                ->with(['student', 'subject', 'payments'])
+                ->with(['student', 'subject.teacher', 'payments'])
                 ->when($academicYear, fn ($query) => $query->whereHas('subject', fn ($subjects) => $subjects->where('academic_year_id', $academicYear->id)))
                 ->latest()
                 ->get()

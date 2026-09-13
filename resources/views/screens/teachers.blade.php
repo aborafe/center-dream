@@ -36,7 +36,7 @@
                 <p>{{ $teacher['subjects'] }} · {{ $teacher['students'] }} طالبًا</p>
                 <span class="status {{ $teacher['is_active'] ? 'paid' : 'partial' }}">{{ $teacher['is_active'] ? 'نشط' : 'موقوف' }}</span>
                 <div class="teacher-finance"><span>تحصيل المواد</span><strong class="amount-ok">{{ $teacher['collections'] }}</strong></div>
-                <div class="teacher-finance"><span>المحفظة المتاحة</span><strong>{{ $teacher['wallet'] }}</strong></div>
+                <div class="teacher-finance"><span>مستحقات تحت التسوية</span><strong>{{ $teacher['wallet'] }}</strong></div>
             </article>
 
             <dialog id="edit-teacher-{{ $teacher['id'] }}" class="form-dialog" aria-labelledby="edit-teacher-title-{{ $teacher['id'] }}">
